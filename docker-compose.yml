@@ -1,0 +1,14 @@
+version: "3.7"
+services:
+  api:
+    container_name: klocc-server
+    image: klocc-server
+    restart: always
+    build: .
+    #environment:
+    #  - TOKEN
+
+networks:
+  default:
+    external:
+      name: caddynet
