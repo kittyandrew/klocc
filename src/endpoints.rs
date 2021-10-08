@@ -23,9 +23,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
 
          [x] We are assuming github as the service provider for repository origin.
 
-         [ ] We don't verify that repository is valid, before creating analyzer thread.
+         [x] We don't verify that repository is valid, before creating analyzer thread.
 
-         [ ] Cache is never invalidated (other than reload), which means if we analyzed a
+         [x] Cache is never invalidated (other than reload), which means if we analyzed a
              repository some time ago, and it's still in-memory, we yield invalid results,
              even though they are probably pretty close, at first (still pretty bad).
 
