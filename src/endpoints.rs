@@ -2,7 +2,7 @@ use rocket::serde::json::{json, Value};
 use rocket::tokio::task;
 use rocket::State;
 
-use crate::counter::get_data_from_repo;
+use crate::counter::{get_data_from_repo, get_latest_hash};
 use crate::utils::expand_url;
 use crate::body::PostJobData;
 use crate::data::Database;
@@ -61,19 +61,40 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         Err(msg)  => return json!({ "status": 500, "message_code": "err_bad_service", "message": msg })
     };
 
+    let hash: String;
+    {
+        // Preparing values to move into the thread.
+        let _repo_url = repo_url.clone();
+        let _target   = "HEAD".to_string();
+        // This method will return a hash of the latest commit in the repository for us to save for later,
+        // or an error if the repository doesn't exist (or it's not available).
+        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {
+            Ok(value) => value,
+            Err(msg)  => return json!({"status": 200, "message_code": "err_failed_to_fetch_from_repo", "message": msg})
+        };
+    }
+
     {
         // Note(andrew): Here we are asynchronously waiting on the lock, if the resource is busy,
         //     and otherwise we just grab the guard and lock data storage. Then we are looking for
         //     our repository in the cache, and if it is present (the result of .get is not empty),
-        //     we are passing grabbed data and writing it back into response to the callee.
+        //     we are passing grabbed data to write it back into the response to the callee, if it
+        //     is relevant.
         let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
-        let cached_data = guard.get(&repo_url);
-        if cached_data.is_some() {
-            return json!({
-                "status": 200, "message_code": "info_success_cached",
-                "message": "Your request was satisfied instantly, because it was found in cache.",
-                "data": cached_data.unwrap(),
-            });
+        let result = guard.get(&repo_url);
+
+        // @Robustness: If we returned 'Some' value, we can verify whether data is relevant ('HEAD' hash
+        // matches), and potentially return existing data.
+        if result.is_some() {
+            let data = result.unwrap();
+            // Verify that hash matches since the last time we ran the klocc job.
+            if data.hash == hash {
+                return json!({
+                    "status": 200, "message_code": "info_success_cached",
+                    "message": "Your request was satisfied instantly, because it was found in cache.",
+                    "data": data,
+                });
+            }
         }
     }
 
@@ -90,20 +111,22 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     finishes (wait is asynchronous). Which, in practice, means that the server can process
         //     other requests in the meantime and do other useful work, while we are waiting for download
         //     or result of analysis (everything inside dispatched routine below).
-        let data = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url)).await.unwrap();
+        let result = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url)).await.unwrap();
 
         // Note(andrew): Our klocc procedure returns a result, where different errors and edge-cases are
         //     handled, explained and propagated in a form of an error message (as a string), so here we
         //     are doing a check for that in our result. If we confirmed that this is indeed an error,
         //     unpack the error message and pass it directly back to the callee.
-        if data.is_err() {
-            return json!({ "status": 500, "message_code": "err_counter_failed", "message": data.err() });
+        if result.is_err() {
+            return json!({ "status": 500, "message_code": "err_counter_failed", "message": result.err() });
         }
 
+        let mut data = result.unwrap();
+        data.hash = hash;
         // Note(andrew): Await and lock temporary mutex guard value, that is being used immediately in-place
         //     to insert values into the cache, and then, in the next step after insert, the guard is freed
         //     and the cache storage is unlocked for other parallel running jobs.
-        db.lock().await.insert(repo_url.clone(), data.unwrap());  // We are safe to unwrap here, because we check that value is ok right above.
+        db.lock().await.insert(repo_url.clone(), data);  // We are safe to unwrap here, because we check that value is ok right above.
     }
 
     // Note(andrew): Lock the guard temporarily here, as we are going to query database for our data

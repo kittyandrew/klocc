@@ -38,8 +38,8 @@ impl LanguageInfo {
 #[serde(crate = "rocket::serde")]
 pub struct Data {
     pub repo: String,
-    //pub hash: String,
-    //pub branch: String,
+    pub hash: String,
+    // pub branch: String,
     pub total: Info,
     pub languages: HashMap<String, LanguageInfo>,
 }
@@ -47,7 +47,7 @@ pub struct Data {
 
 impl Data {
     pub fn new(repo: String, total: Info) -> Self {
-        Self { repo: repo, total: total, languages: HashMap::new() }
+        Self { repo: repo, total: total, languages: HashMap::new(), hash: "".to_string() }
     }
 }
 

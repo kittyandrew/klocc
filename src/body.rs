@@ -37,8 +37,7 @@ impl<'r> FromData<'r> for PostJobData {
 
         match data.open(LIMIT).into_string().await {
             Ok(string) => match from_str::<PostJobData>(&string) {
-                // Return successfully.
-                Ok(job) => return Outcome::Success(job),
+                Ok(job) => return Outcome::Success(job),  // Return successfully.
                 Err(e)  => return Outcome::Failure((Status::BadRequest, format!("Failed to parse json: {}.", e))),
             },
             Err(e) => return Outcome::Failure((Status::BadRequest, format!("Failed to read body: {}.", e)))
