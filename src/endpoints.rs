@@ -58,7 +58,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     the only place where we pattern match it.
     let repo_url = match expand_url(&data.provider, &data.username, &data.reponame) {
         Ok(value) => value,
-        Err(msg)  => return json!({ "status": 500, "message_code": "err_bad_service", "message": msg })
+        Err(msg)  => return json!({ "status": 400, "message_code": "err_bad_service", "message": msg })
     };
 
     let hash: String;
@@ -70,7 +70,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         // or an error if the repository doesn't exist (or it's not available).
         hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {
             Ok(value) => value,
-            Err(msg)  => return json!({"status": 200, "message_code": "err_failed_to_fetch_from_repo", "message": msg})
+            Err(msg)  => return json!({"status": 400, "message_code": "err_failed_to_fetch_from_repo", "message": msg})
         };
     }
 
