@@ -1,22 +1,21 @@
 FROM rustlang/rust:nightly-slim as builder
 WORKDIR /usr/src/app
-
-# Copying config/build files
+# Copying config/build files.
 COPY src src
 COPY Cargo.toml .
 COPY Cargo.lock .
-
+# Running rust-target install for the static-binary target (musl).
 RUN rustup target install x86_64-unknown-linux-musl \
+ # Installing static binary, using locked dependcies (no auto-update for anything).
  && cargo install --locked --target=x86_64-unknown-linux-musl --path .
 
 
 FROM alpine:3.14 as main
 RUN apk add --no-cache git
-
 WORKDIR /usr/src/app
 # Copying compiled executable from the 'builder'.
 COPY --from=builder /usr/local/cargo/bin/klocc .
-# Copying rocket config file into final instance.
+# Copying rocket config file into final instance (startup/runtime config).
 COPY Rocket.toml .
-
+# Running binary.
 ENTRYPOINT ["./klocc"]

@@ -55,6 +55,8 @@ impl Data {
 pub type Database = Mutex<HashMap<String, Data>>;
 
 
+// A helper function to create an empty instance of the hashmap-mutex structure, which
+// is used as in-memory storage.
 pub fn init_db() -> Database {
     let storage = HashMap::<String, Data>::new();
     Mutex::new(storage)

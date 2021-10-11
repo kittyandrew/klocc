@@ -12,7 +12,7 @@ mod endpoints;
 fn rocket() -> _ {
     rocket::build()
         .mount("/api", routes![endpoints::post_klocc_job])
-        // All-catchers
+        // TODO: All-catchers
         //.register(catchers![
         //    misc::not_found,
         //    misc::unauth_handler,
