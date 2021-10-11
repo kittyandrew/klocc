@@ -3,6 +3,7 @@
 
 mod data;
 mod body;
+mod cors;
 mod utils;
 mod counter;
 mod endpoints;
@@ -20,5 +21,7 @@ fn rocket() -> _ {
         //])
         // Managing mutex-es.
         .manage(data::init_db())
+        // Adding CORS headers fairing.
+        .attach(cors::CORS)
 }
 
