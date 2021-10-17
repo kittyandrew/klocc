@@ -57,7 +57,13 @@ fn rocket() -> _ {
         //     code itself (it is in the caddy config on production). This is optional anyways, so should be ok
         //     to never remove this.  @Robustness
         //
-        //     You might try: AllowedHeaders::some(&["Authorization", "Accept"])
+        //     You might want:
+        //
+        //         AllowedHeaders::some(&["Authorization", "Accept"])
+        //
+        //     But this blocks (returns 403) any request that has any other header, not specified in the list,
+        //     so this seems not very useful (or, at least, very annoying to configure) in our case. Instead,
+        //     we just allow everything for now:  @Robustness
         allowed_headers: AllowedHeaders::all(),
         allow_credentials: true,
         ..Default::default()
@@ -66,17 +72,13 @@ fn rocket() -> _ {
     .to_cors().unwrap();
 
     rocket::build()
+        // Register our endpoints with /api/ root prefix.
         .mount("/api", routes![
             endpoints::post_klocc_job,
             endpoints::get_health,
         ])
-        // TODO: All-catchers
-        //.register(catchers![
-        //    misc::not_found,
-        //    misc::unauth_handler,
-        //    misc::serverside_handler,
-        //])
-        // Managing mutex-es.
+        // Managing cache mutex. This allows rocket to pass this instance to us in any handler where we need
+        // it, using rocket's internal 'State' wrapper.
         .manage(data::init_db())
         // Adding CORS middleware.
         .attach(cors)
