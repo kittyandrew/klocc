@@ -19,3 +19,9 @@ COPY --from=builder /usr/local/cargo/bin/klocc .
 COPY Rocket.toml .
 # Running binary.
 ENTRYPOINT ["./klocc"]
+
+# Additional layer for the healthcheck inside the container. This allows
+# to display a container status in the 'docker ps' or anything talks to
+# docker daemon.
+HEALTHCHECK --interval=1m --timeout=3s \
+  CMD curl -sf 0.0.0.0:8080/api/health || exit 1

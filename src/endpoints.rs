@@ -1,4 +1,5 @@
 use rocket::serde::json::{json, Value};
+use std::time::SystemTime;
 use rocket::tokio::task;
 use rocket::State;
 
@@ -6,6 +7,18 @@ use crate::counter::{get_data_from_repo, get_latest_hash};
 use crate::utils::expand_url;
 use crate::body::PostJobData;
 use crate::data::Database;
+
+
+// Note(andrew): Since we now store creation time for each data instance in the
+//     cache, we can add additional "anti-ddos" condition for /jobs the endpoint,
+//     in which we check if cache is newer than 'TRUST_CACHE_SECONDS', and if it
+//     is, we do not need to make a request via git to get the latest valid hashes
+//     from the remote repository. So, for example, someone who spams a bunch of
+//     requests for the same repository will recieve faster (instant) response and
+//     won't trigger creating new verification thread for each request. Just make
+//     sure to keep this low enough that realistically nobody have a chance to be
+//     confused and get the bad result.
+const TRUST_CACHE_SECONDS: u64 = 60 * 15;  // @Robustness: No-doubt cache for 15 minutes, will it cause issues?
 
 
 /*
@@ -55,6 +68,24 @@ use crate::data::Database;
 */
 
 
+// This endpoint is designed to help monitor and debug service availability. It
+// is used in 'healthcheck' routine for docker container daemon, and it is also
+// useful for getting some status information about cache storage. Note that we
+// don't have 'format' (content-type header) required for this endpoint (or any
+// other header requirements), so *any* GET request has to be valid here.
+#[get("/health")]
+pub async fn get_health(db: &State<Database>) -> Value {
+    // Just for informational purposes add count of total cached items
+    // in the storage to the response (TODO(andrew): add storage size,
+    // meaning an actual amount of memory taken by cache).
+    let count = db.lock().await.len();
+    return json!({
+        "status": 200, "message_code": "info_health_ok", "message": "KLOCC is healthy!",
+        "data": {"cached_count": count},
+    })
+}
+
+
 #[post("/jobs", format = "application/json", data = "<data>")]
 pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     // Note(andrew): First thing first, we are trying to expand service name into url, using our
@@ -66,6 +97,35 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         Ok(value) => value,
         Err(msg)  => return json!({ "status": 400, "message_code": "err_bad_service", "message": msg })  // Early return from the handler.
     };
+
+    // TODO(andrew): Since we are getting 'data' here, store it outside the code block, because
+    //     we want to query it again later. Or should we still read it from mutex (sounds like
+    //     some potential race conditions regarding parallel-processed requests are possible, or
+    //     even 'to be expected', so better to think carefully about this)?  @Robustness @Speed
+
+    // Note(andrew): Before requesting latest hash from the remote, let's check if the data is
+    //     present in the cache, and if it is, we can check if it is recent enough (was created
+    //     less than 'TRUST_CACHE_SECONDS' ago), which means we can immediately return, as we are
+    //     not concerned enough about validity of the that data to take time for additional meta-
+    //     data request. Hopefully, this increases our robustness and allows to survive situations
+    //     like DoS (either intentional or just an unexpected amount of load).
+    {
+        let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
+        let result = guard.get(&repo_url);
+
+        if result.is_some() {
+            let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
+            let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap @Robustness
+
+            if (data.creation_time + TRUST_CACHE_SECONDS) >= curr.as_secs() {
+                return json!({
+                    "status": 200, "message_code": "info_success_cached_recent",
+                    "message": "Your request was satisfied instantly, because it was found in cache.",
+                    "data": data,
+                });  // Early return from the handler.
+            }
+        }
+    }
 
     let hash: String;
     {
@@ -93,8 +153,6 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
         let result = guard.get(&repo_url);
 
-        // @Robustness: If we returned 'Some' value, we can verify whether data is relevant ('HEAD' hash
-        // matches), and potentially return existing data.
         if result.is_some() {
             let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
             // Verify that hash matches since the last time we ran the klocc job.

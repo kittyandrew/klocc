@@ -9,4 +9,6 @@ edition = "2021"
 tokei = "12.1.2"
 tempdir = "0.3"
 rocket = { version = "0.5.0-rc.1", features = ["json"] }
-
+# Note(andrew): Only master supports 0.5-rc.1 for now. Change this to any release version that
+#     is released in the future, when it starts to support latest version of rocket.  @Robustness
+rocket_cors = { git = "https://github.com/lawliet89/rocket_cors.git", default-features = false }
