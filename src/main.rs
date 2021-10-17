@@ -56,7 +56,9 @@ fn rocket() -> _ {
         //     probably do, so don't remove this for now, even though there is not authorization in the source
         //     code itself (it is in the caddy config on production). This is optional anyways, so should be ok
         //     to never remove this.  @Robustness
-        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept"]),
+        //
+        //     You might try: AllowedHeaders::some(&["Authorization", "Accept"])
+        allowed_headers: AllowedHeaders::all(),
         allow_credentials: true,
         ..Default::default()
     }
