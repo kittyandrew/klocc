@@ -4,9 +4,14 @@ WORKDIR /usr/src/app
 COPY src src
 COPY Cargo.toml .
 COPY Cargo.lock .
+
+# Note(andrew): For now we have to peg rust-nightly version,
+#     since https://github.com/SergioBenitez/Rocket/issues/1948.
+RUN rustup install nightly-2021-10-13 && rustup default nightly-2021-10-13
+
 # Running rust-target install for the static-binary target (musl).
 RUN rustup target install x86_64-unknown-linux-musl \
- # Installing static binary, using locked dependcies (no auto-update for anything).
+ # Installing static binary, using locked dependcies (no auto-update for anything). \
  && cargo install --locked --target=x86_64-unknown-linux-musl --path .
 
 
