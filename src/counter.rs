@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokei::{Config, Languages};
+use tokei::{Config, Languages, Sort};
 use std::process::{Command};
 use tempdir::TempDir;
 
-use crate::data::{Info, LanguageInfo, Data};
+use crate::data::{Info, FileInfo, LanguageInfo, Data};
 
 
 // Logging with current unix timestamp. Useful to reduce number of typed lines to do basic logging.
@@ -43,12 +43,13 @@ pub fn get_latest_hash(repo_url: String, branch: String) -> Result<String, Strin
         return Err(format!("Failed to fetch latest hash from the remote repository ({}) for the branch '{}': process returned non-zero exit status code.", &repo_url, &branch));
     };
 
-    // Take stdout and cut first string before \t, which is a hash, in the case of 'git ls-remote'.
+    // First extrcat utf8 string from the stdout..
     let result_string = match String::from_utf8(result.stdout) {
         Ok(value) => value,
         Err(msg)  => return Err(format!("Invalid UTF-8 sequence: {}", msg))
     };
 
+    // ..and then cut first string before \t, which is a hash in the case of 'git ls-remote'.
     match result_string.split("\t").next() {
         Some(v) => return Ok(v.to_string()),  // Return successfully.
         None    => return Err("Failed to split result by '\t' to extract hash from the 'git ls-remote'!".to_string())
@@ -77,6 +78,7 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
 
     {  // This might be worth factoring out in the separate function.
         let output = Command::new("git")
+            // TODO: Here we always do recurse-submodules, but this can break easily when the submodule is not public.  @Robustness
             .args(["clone", "--depth", "1", "--single-branch", "--recurse-submodules", &repo_url, &repo_path])
             .output();
 
@@ -99,54 +101,83 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
 
     info!("Counting lines for {} ({}) ...", &repo_url, &branch);
 
-    // The paths to search. Accepts absolute, relative, and glob paths.
-    let paths    = &[&repo_path];
-    // Exclude any path that contains any of these strings.
-    let excluded = &[];
-    // Config allows you to configure what is searched and counted. Defaulting all un-filled
-    // fields to default values from the config.
-    // Refer to: https://docs.rs/tokei/12.1.2/tokei/struct.Config.html
-    let config   = Config { treat_doc_strings_as_comments: Some(true), ..Config::default() };
+    let included = &[&repo_path];  // The paths to search. Accepts absolute, relative, and glob paths.
+    let excluded = &[];            // Exclude any path that contains any of these strings.
+    // Note(andrew): Config allows you to configure what is searched and counted. Defaulting all un-filled
+    //     fields to default values from the config.
+    //     Refer to: https://docs.rs/tokei/12.1.2/tokei/struct.Config.html
+    //
+    //     For some reason config accepts additional 'sort' argument, which does do anything:  @Robustness @Bug
+    //
+    //         sort: Some(Sort::Files)
+    //
+    let config = Config { treat_doc_strings_as_comments: Some(true), ..Config::default() };
 
     // Here we are calling the 'tokei' lib to actually read given paths and provide us with
     // statistical information about it.
     let mut languages = Languages::new();
-    languages.get_statistics(paths, excluded, &config);
+    languages.get_statistics(included, excluded, &config);
 
     let total    = languages.total();
     let mut info = Info::new(total.code as u32, total.comments as u32, total.blanks as u32);
+    // Main top-level data structure containing all info that we collect and store.
     let mut data = Data::new(repo_url.clone(), info);
 
     // These variables will be used in a language loop.
     let mut lang:   LanguageInfo;
+    let mut file:   FileInfo;
     let mut name:   String;
     let mut offset: usize;
 
-    for (key, item) in languages.iter() {
+    for (key, mut item) in languages {
         info = Info::new(item.code as u32, item.comments as u32, item.blanks as u32);
-        lang = LanguageInfo::new(info);
+        lang = LanguageInfo::new(key.to_string(), info);
 
-        for report in item.reports.iter() {
-            info = Info::new(report.stats.code as u32, report.stats.comments as u32, report.stats.blanks as u32);
+        // Sorting language reports array by lines of code in each file.  @Speed
+        item.sort_by(Sort::Lines);
 
+        for report in item.reports {
             // Convert path buffer item into 'str' first, and then into string for manipulation.
-            name = report.name.to_str().unwrap().to_string();
-            // Calculate offset of the temp dir prefix + repository name + length of '/' (which is
-            // a last slash, that is present after the repo name). Then use '.drain', which eats
-            // 'name' string up to the point of 'offset'. Maybe there is more straightforward way
-            // to do this, idk.
-            offset = name.find(&reponame).unwrap() + reponame.len() + 1;
+            name = report.name.to_str().unwrap().to_string();  // @UnsafeUnwrap
+            // Note(andrew): Calculating offset of the temp dir as path prefix + repository name
+            // + length of '/' (which is a last slash, that is present after the repo name). Then
+            // use '.drain', which consumes in-place 'name' string up to the point of 'offset'.
+            // Maybe there is more straightforward way to do this, idk.
+            offset = name.find(&reponame).unwrap() + reponame.len() + 1;  // @UnsafeUnwrap
             name.drain(..offset);
 
-            lang.files.insert(name, info);
+            file = FileInfo::new(name, report.stats.code as u32, report.stats.comments as u32, report.stats.blanks as u32);
+
+            lang.files.push(file);
         }
 
-        data.languages.insert(key.to_string(), lang);
+        data.languages.push(lang);
     }
+
+    // Note(andrew): After we inserted all values of 'LanguageInfo' into the 'data', we
+    //     can sort them here by total amount of lines of code each language has, since
+    //     we are using vector (which allows us to have arbitrary ordered data, instead
+    //     of having it ordered by key value in a hashtable). So, we want to store our
+    //     data in-memory sortered by total LoC per language (bigger first).  @Speed
+    //
+    //     Sort function of the 'Vector' expects to pass 2 arguments into the 'compare',
+    //     first one is the value of the first item, and the second one - of the second.
+    //     For sorting we are not using keys (language names), and instead just adding 3
+    //     3 possible types of lines that we have (code, comments and blanks), casting
+    //     them to a bigger storage in the process (from u32 to u64) to prevent potential
+    //     mathematical overflow, and then calling a comparison built-in between u64.
+    data.languages.sort_by(|av, bv| {
+        let total_a = (av.total.code as u64) + (av.total.comments as u64) + (av.total.blanks as u64);
+        let total_b = (bv.total.code as u64) + (bv.total.comments as u64) + (bv.total.blanks as u64);
+        // Note(andrew): We are doing 'b-to-a' comparison here, instead of 'a-to-b' to achieve
+        //     reverse sorting order, meaning bigger values are going to be first (files with
+        //     bigger total). Since this is exactly what we want and what callee will expect.
+        total_b.cmp(&total_a)  // This line returns.
+    });
 
     info!("Cleaning up after {} ({}) ...", &repo_url, &branch);
 
-    dir.close().unwrap();
+    dir.close().unwrap();  // @UnsafeUnwrap
 
     return Ok(data);
 }

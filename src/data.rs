@@ -1,10 +1,10 @@
-use rocket::serde::{Serialize, Deserialize};
 use rocket::tokio::sync::Mutex;
 use std::collections::HashMap;
+use rocket::serde::Serialize;
 use std::time::SystemTime;
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
 pub struct Info {
     pub code: u32,
@@ -20,22 +20,40 @@ impl Info {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
-pub struct LanguageInfo {
-    pub total: Info,
-    pub files: HashMap<String, Info>,
+pub struct FileInfo {
+    pub path: String,
+    pub code: u32,
+    pub comments: u32,
+    pub blanks: u32,
 }
 
 
-impl LanguageInfo {
-    pub fn new(total: Info) -> Self {
-        Self { total: total, files: HashMap::new() }
+impl FileInfo {
+    pub fn new(path: String, code: u32, comments: u32, blanks: u32) -> Self {
+        Self { path: path, code: code, comments: comments, blanks: blanks }
     }
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
+#[serde(crate = "rocket::serde")]
+pub struct LanguageInfo {
+    pub name: String,
+    pub total: Info,
+    pub files: Vec<FileInfo>,
+}
+
+
+impl LanguageInfo {
+    pub fn new(name: String, total: Info) -> Self {
+        Self { name: name, total: total, files: Vec::new() }
+    }
+}
+
+
+#[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
 pub struct Data {
     pub creation_time: u64,
@@ -43,7 +61,7 @@ pub struct Data {
     pub hash: String,
     // pub branch: String,
     pub total: Info,
-    pub languages: HashMap<String, LanguageInfo>,
+    pub languages: Vec<LanguageInfo>,
 }
 
 
@@ -63,7 +81,7 @@ impl Data {
         Self {
             creation_time: now.as_secs(),
             repo: repo, total: total,
-            languages: HashMap::new(),
+            languages: Vec::new(),
             hash: "".to_string(),
          }
     }
