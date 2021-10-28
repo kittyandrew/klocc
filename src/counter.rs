@@ -43,13 +43,13 @@ pub fn get_latest_hash(repo_url: String, branch: String) -> Result<String, Strin
         return Err(format!("Failed to fetch latest hash from the remote repository ({}) for the branch '{}': process returned non-zero exit status code.", &repo_url, &branch));
     };
 
-    // First extrcat utf8 string from the stdout..
+    // First extract utf8 string from the stdout..
     let result_string = match String::from_utf8(result.stdout) {
         Ok(value) => value,
         Err(msg)  => return Err(format!("Invalid UTF-8 sequence: {}", msg))
     };
 
-    // ..and then cut first string before \t, which is a hash in the case of 'git ls-remote'.
+    // ..and then cut first string before '\t', which is a hash in the case of 'git ls-remote'.
     match result_string.split("\t").next() {
         Some(v) => return Ok(v.to_string()),  // Return successfully.
         None    => return Err("Failed to split result by '\t' to extract hash from the 'git ls-remote'!".to_string())
@@ -139,10 +139,10 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
         for report in item.reports {
             // Convert path buffer item into 'str' first, and then into string for manipulation.
             name = report.name.to_str().unwrap().to_string();  // @UnsafeUnwrap
-            // Note(andrew): Calculating offset of the temp dir as path prefix + repository name
-            // + length of '/' (which is a last slash, that is present after the repo name). Then
-            // use '.drain', which consumes in-place 'name' string up to the point of 'offset'.
-            // Maybe there is more straightforward way to do this, idk.
+            // Note(andrew): Calculating offset of the temp dir as path prefix + repository name + length
+            //     of '/' (which is a last slash, that is present after the repo name). Then use '.drain',
+            //     which consumes in-place 'name' string up to the point of 'offset'. Maybe there is more
+            //     straightforward way to do this in rust std, idk.
             offset = name.find(&reponame).unwrap() + reponame.len() + 1;  // @UnsafeUnwrap
             name.drain(..offset);
 
@@ -162,8 +162,8 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
     //
     //     Sort function of the 'Vector' expects to pass 2 arguments into the 'compare',
     //     first one is the value of the first item, and the second one - of the second.
-    //     For sorting we are not using keys (language names), and instead just adding 3
-    //     3 possible types of lines that we have (code, comments and blanks), casting
+    //     For sorting we are not using keys (language names) and instead just adding all
+    //     of 3 possible types of lines that we have (code, comments and blanks), casting
     //     them to a bigger storage in the process (from u32 to u64) to prevent potential
     //     mathematical overflow, and then calling a comparison built-in between u64.
     data.languages.sort_by(|av, bv| {
