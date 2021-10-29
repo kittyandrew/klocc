@@ -23,6 +23,7 @@ impl Info {
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
 pub struct FileInfo {
+    pub name: String,
     pub path: String,
     pub code: u32,
     pub comments: u32,
@@ -31,8 +32,8 @@ pub struct FileInfo {
 
 
 impl FileInfo {
-    pub fn new(path: String, code: u32, comments: u32, blanks: u32) -> Self {
-        Self { path: path, code: code, comments: comments, blanks: blanks }
+    pub fn new(name: String, path: String, code: u32, comments: u32, blanks: u32) -> Self {
+        Self { name: name, path: path, code: code, comments: comments, blanks: blanks }
     }
 }
 

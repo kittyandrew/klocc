@@ -127,6 +127,7 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
     let mut lang:   LanguageInfo;
     let mut file:   FileInfo;
     let mut name:   String;
+    let mut path:   String;
     let mut offset: usize;
 
     for (key, mut item) in languages {
@@ -137,16 +138,18 @@ pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) 
         item.sort_by(Sort::Lines);
 
         for report in item.reports {
+            // Store only file name here.
+            name = report.name.file_name().unwrap().to_str().unwrap().to_string();  // @UnsafeUnwrap
             // Convert path buffer item into 'str' first, and then into string for manipulation.
-            name = report.name.to_str().unwrap().to_string();  // @UnsafeUnwrap
+            path = report.name.to_str().unwrap().to_string();  // @UnsafeUnwrap
             // Note(andrew): Calculating offset of the temp dir as path prefix + repository name + length
             //     of '/' (which is a last slash, that is present after the repo name). Then use '.drain',
             //     which consumes in-place 'name' string up to the point of 'offset'. Maybe there is more
             //     straightforward way to do this in rust std, idk.
-            offset = name.find(&reponame).unwrap() + reponame.len() + 1;  // @UnsafeUnwrap
-            name.drain(..offset);
+            offset = path.find(&reponame).unwrap() + reponame.len() + 1;  // @UnsafeUnwrap
+            path.drain(..offset);
 
-            file = FileInfo::new(name, report.stats.code as u32, report.stats.comments as u32, report.stats.blanks as u32);
+            file = FileInfo::new(name, path, report.stats.code as u32, report.stats.comments as u32, report.stats.blanks as u32);
 
             lang.files.push(file);
         }
