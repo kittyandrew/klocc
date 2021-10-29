@@ -16,7 +16,7 @@ RUN rustup target install x86_64-unknown-linux-musl \
 
 
 FROM alpine:3.14 as main
-RUN apk add --no-cache git
+RUN apk add --no-cache git curl
 WORKDIR /usr/src/app
 # Copying compiled executable from the 'builder'.
 COPY --from=builder /usr/local/cargo/bin/klocc .
