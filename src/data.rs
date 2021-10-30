@@ -58,6 +58,7 @@ impl LanguageInfo {
 #[serde(crate = "rocket::serde")]
 pub struct Data {
     pub creation_time: u64,
+    pub verified_time: u64,
     pub repo: String,
     pub hash: String,
     // pub branch: String,
@@ -81,6 +82,7 @@ impl Data {
 
         Self {
             creation_time: now.as_secs(),
+            verified_time: now.as_secs(),
             repo: repo, total: total,
             languages: Vec::new(),
             hash: "".to_string(),

@@ -9,16 +9,18 @@ use crate::body::PostJobData;
 use crate::data::Database;
 
 
-// Note(andrew): Since we now store creation time for each data instance in the
-//     cache, we can add additional "anti-ddos" condition for /jobs the endpoint,
-//     in which we check if cache is newer than 'TRUST_CACHE_SECONDS', and if it
-//     is, we do not need to make a request via git to get the latest valid hashes
-//     from the remote repository. So, for example, someone who spams a bunch of
-//     requests for the same repository will recieve faster (instant) response and
-//     won't trigger creating new verification thread for each request. Just make
-//     sure to keep this low enough that realistically nobody have a chance to be
-//     confused and get the bad result.
-const TRUST_CACHE_SECONDS: u64 = 60 * 15;  // @Robustness: No-doubt cache for 15 minutes, will it cause issues?
+// Note(andrew): To avoid spamming git server with a check for latest commit hash
+//     on every request, which is extremely slow and not productive (sending 1000
+//     requests to our API will make us bombard targeted git server with requests
+//     too), we can check 'verified_time' variable for each repository in our cache
+//     and if since the last check the amount of time passed is less than value of
+//     'VERIFY_MIN_INTERVAL', we assume data as valid. This value needs to be kept
+//     low enough so it is very unlikely for someone who does not try to spam our
+//     API to be confused or frustrated with outdated data. Anyway, this check is
+//     mostly targeted to improve APIs performance, and not really to prevent all
+//     kinds of potential DoS attacks (i.e. it is much easier to just spam the API
+//     with huge amount of requests with new repository target in each of them).  @Robustness @Incomplete
+const VERIFY_MIN_INTERVAL: u64 = 60 * 5;  // @Robustness: Hopefully verifying cache integrity once in 5 minutes will not cause any problems in our case.
 
 
 /*
@@ -104,20 +106,22 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     even 'to be expected', so better to think carefully about this)?  @Robustness @Speed
 
     // Note(andrew): Before requesting latest hash from the remote, let's check if the data is
-    //     present in the cache, and if it is, we can check if it is recent enough (was created
-    //     less than 'TRUST_CACHE_SECONDS' ago), which means we can immediately return, as we are
-    //     not concerned enough about validity of the that data to take time for additional meta-
-    //     data request. Hopefully, this increases our robustness and allows to survive situations
-    //     like DoS (either intentional or just an unexpected amount of load).
+    //     present in the cache, and if it is, we can check if it is recent enough (integrity
+    //     was verified with latest hash less than 'VERIFY_MIN_INTERVAL' seconds ago). And if
+    //     it is recent enough, we can immediately return, as we are not concerned enough about
+    //     validity of the that data to take time for additional metadata request. Hopefully,
+    //     this will increase our robustness and allow us to survive situations like 'DoS attack'
+    //     (either intentional or just an unexpected amount of continuous load, hammering small
+    //     range of cached repositories).
     {
         let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
         let result = guard.get(&repo_url);
 
         if result.is_some() {
             let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
-            let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap @Robustness
+            let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
 
-            if (data.creation_time + TRUST_CACHE_SECONDS) >= curr.as_secs() {
+            if (data.verified_time + VERIFY_MIN_INTERVAL) >= curr.as_secs() {
                 return json!({
                     "status": 200, "message_code": "info_success_cached_recent",
                     "message": "Your request was satisfied instantly, because it was found in cache.",
@@ -150,13 +154,19 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     have been pushed to the repository since our last analysis, so there is some chance
         //     (although we don't know, and probably don't have a way to know, exactly) that stored
         //     result is inaccurate.
-        let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
-        let result = guard.get(&repo_url);
+        let mut guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
+        let result = guard.get_mut(&repo_url);
 
         if result.is_some() {
             let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
             // Verify that hash matches since the last time we ran the klocc job.
             if data.hash == hash {
+                // Note(andrew): Before returning, we need to get current system time and update cached
+                //     data field with it, so we will be able to tell on the next request with the same
+                //     cached target whether we updated it recently enough and can respond immediately.
+                let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
+                data.verified_time = curr.as_secs();
+
                 return json!({
                     "status": 200, "message_code": "info_success_cached",
                     "message": "Your request was satisfied instantly, because it was found in cache.",
