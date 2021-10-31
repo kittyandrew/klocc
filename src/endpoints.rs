@@ -95,8 +95,8 @@ pub async fn get_health(db: &State<Database>) -> Value {
 pub async fn get_metrics(encoder: &State<TextEncoder>) -> String {
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();  // @UnsafeUnwrap
 
+    encoder.encode(&metric_families, &mut buffer).unwrap();  // @UnsafeUnwrap
     return String::from_utf8(buffer).unwrap();  // @UnsafeUnwrap
 }
 
