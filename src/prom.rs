@@ -18,7 +18,8 @@ lazy_static! {
     ).unwrap();
 
     pub static ref JOB_RESPONSE_SIZE_BYTES: HistogramVec = register_histogram_vec!(
-        "klocc_jobs_response_size_bytes", "Jobs endpoint response body size in bytes", &["handler"]
+        "klocc_jobs_response_size_bytes", "Jobs endpoint response body size in bytes", &["handler"],
+        vec![256., 1024., 4096., 16384., 65536., 262144., 1048576., 4194304.],
     ).unwrap();
 }
 
@@ -48,19 +49,24 @@ impl Fairing for PrometheusCollection {
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
         if request.method() == Method::Post && request.uri().path() == "/api/jobs" {
+            // Measuring request latency (internal processing time). Doing this first, so any
+            // code below adds minimal overhead to the processing time. Just make sure that the
+            // code below actually isn't artificially slow.
+            let duration_timer = request.local_cache(|| DurationTimer(None));
+            if let Some(duration) = duration_timer.0.map(|st| st.elapsed()) {
+                let latency_ms = duration.as_millis();
+
+                JOB_REQUESTS_DURATION.local().with_label_values(&["all"]).observe(latency_ms as f64 / 1000.);
+                // While we can, lets add response header with timing as well.
+                response.set_raw_header("X-Response-Time", format!("{} ms", latency_ms));
+            };
+
             // Record total request count.
             TOTAL_REQUESTS_SERVED.inc();
 
             // Record response body size.
             if let Some(body_size) = response.body_mut().size().await {
                 JOB_RESPONSE_SIZE_BYTES.local().with_label_values(&["all"]).observe(body_size as f64);
-            };
-
-            // Measuring request latency (internal processing time).
-            let duration_timer = request.local_cache(|| DurationTimer(None));
-            if let Some(duration) = duration_timer.0.map(|st| st.elapsed()) {
-                let latency: f64 = duration.as_micros() as f64 / 1_000_000.;
-                JOB_REQUESTS_DURATION.local().with_label_values(&["all"]).observe(latency);
             };
         }
     }
