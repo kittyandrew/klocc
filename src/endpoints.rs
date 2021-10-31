@@ -1,9 +1,11 @@
+use prometheus::{self, TextEncoder, Encoder};
 use rocket::serde::json::{json, Value};
 use std::time::SystemTime;
 use rocket::tokio::task;
 use rocket::State;
 
 use crate::counter::{get_data_from_repo, get_latest_hash};
+use crate::prom::TOTAL_REPOSITORIES_SERVED;
 use crate::utils::expand_url;
 use crate::body::PostJobData;
 use crate::data::Database;
@@ -85,6 +87,17 @@ pub async fn get_health(db: &State<Database>) -> Value {
         "status": 200, "message_code": "info_health_ok", "message": "KLOCC is healthy!",
         "data": {"cached_count": count},
     })
+}
+
+
+// Native metrics export support for Prometheus.
+#[get("/metrics")]
+pub async fn get_metrics(encoder: &State<TextEncoder>) -> String {
+    let metric_families = prometheus::gather();
+    let mut buffer = Vec::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();  // @UnsafeUnwrap
+
+    return String::from_utf8(buffer).unwrap();  // @UnsafeUnwrap
 }
 
 
@@ -205,6 +218,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     to insert values into the cache, and then, in the next step after insert, the guard is freed
         //     and the cache storage is unlocked for other parallel running jobs.
         db.lock().await.insert(repo_url.clone(), data);  // We are safe to unwrap here, because we check that value is ok right above.
+
+        // Tracking repository statistics.
+        TOTAL_REPOSITORIES_SERVED.inc();
     }
 
     // Note(andrew): Lock the guard temporarily here, as we are going to query database for our data
