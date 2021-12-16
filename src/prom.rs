@@ -7,11 +7,13 @@ use std::time::Instant;
 
 
 lazy_static! {
-    pub static ref TOTAL_REQUESTS_SERVED: IntCounter =
-        register_int_counter!("klocc_total_requests_served", "Total number of requests served at /api/jobs endpoint").unwrap();
+    pub static ref TOTAL_REQUESTS_SERVED: IntCounter = register_int_counter!(
+        "klocc_total_requests_served", "Total number of requests served at /api/jobs endpoint"
+    ).unwrap();
 
-    pub static ref TOTAL_REPOSITORIES_SERVED: IntCounter =
-        register_int_counter!("klocc_total_repositories_served", "Total number of repositories processed and analyzed").unwrap();
+    pub static ref TOTAL_REPOSITORIES_SERVED: IntCounter = register_int_counter!(
+        "klocc_total_repositories_served", "Total number of repositories processed and analyzed"
+    ).unwrap();
 
     pub static ref JOB_REQUESTS_DURATION: HistogramVec = register_histogram_vec!(
         "klocc_jobs_requests_duration_seconds", "Jobs endpoint latencies in seconds", &["handler"]

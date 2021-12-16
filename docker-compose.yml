@@ -5,8 +5,6 @@ services:
     image: klocc-server
     restart: always
     build: .
-    #environment:
-    #  - TOKEN
 
 networks:
   default:

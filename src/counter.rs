@@ -11,7 +11,7 @@ macro_rules! info {
     ( $s:tt, $( $x:expr ),* ) => {
         {
             let start_time = SystemTime::now();
-            let curr_time  = start_time.duration_since(UNIX_EPOCH).unwrap();
+            let curr_time  = start_time.duration_since(UNIX_EPOCH).unwrap();  // @UnsafeUnwrap
             let msg = format!($s, $( $x, )*);
             println!("[{:>10}] - {}", curr_time.as_secs(), &msg);
         }

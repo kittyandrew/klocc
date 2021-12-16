@@ -128,10 +128,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     range of cached repositories).
     {
         let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
-        let result = guard.get(&repo_url);
 
-        if result.is_some() {
-            let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
+        // @SafeUnwrap: Data has to be present to continue, so we use safe unwrap condition.
+        if let Some(data) = guard.get(&repo_url); {
             let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
 
             if (data.verified_time + VERIFY_MIN_INTERVAL) >= curr.as_secs() {
@@ -151,7 +150,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         let _target   = "HEAD".to_string();
         // This method will return a hash of the latest commit in the repository for us to save for later,
         // or an error if the repository doesn't exist (or it's not available).
-        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {  // @PotentialPanic @Robustness: Thread can fail?
+        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {  // @UnsafeUnwrap @Robustness: Thread can fail?
             Ok(value) => value,
             Err(msg)  => return json!({"status": 400, "message_code": "err_failed_to_fetch_from_repo", "message": msg})  // Early return from the handler.
         };
@@ -168,10 +167,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     (although we don't know, and probably don't have a way to know, exactly) that stored
         //     result is inaccurate.
         let mut guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
-        let result = guard.get_mut(&repo_url);
 
-        if result.is_some() {
-            let data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for 'some'.
+        // @SafeUnwrap: Data has to be present to continue, so we use safe unwrap condition.
+        if let Some(data) = guard.get_mut(&repo_url) {
             // Verify that hash matches since the last time we ran the klocc job.
             if data.hash == hash {
                 // Note(andrew): Before returning, we need to get current system time and update cached
@@ -208,8 +206,8 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     handled, explained and propagated in a form of an error message (as a string), so here we
         //     are doing a check for that in our result. If we confirmed that this is indeed an error,
         //     unpack the error message and pass it directly back to the callee.
-        if result.is_err() {
-            return json!({ "status": 500, "message_code": "err_counter_failed", "message": result.err() });  // Early return from the handler.
+        if let Err(message) = result {
+            return json!({ "status": 500, "message_code": "err_counter_failed", "message": message });  // Early return from the handler.
         }
 
         let mut data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for the error.
