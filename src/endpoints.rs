@@ -130,7 +130,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
 
         // @SafeUnwrap: Data has to be present to continue, so we use safe unwrap condition.
-        if let Some(data) = guard.get(&repo_url); {
+        if let Some(data) = guard.get(&repo_url) {
             let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
 
             if (data.verified_time + VERIFY_MIN_INTERVAL) >= curr.as_secs() {
