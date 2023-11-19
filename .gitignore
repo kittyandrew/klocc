@@ -1,2 +1,4 @@
 /target
 *.swp
+TODO.txt
+/redis

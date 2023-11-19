@@ -1,11 +1,12 @@
-FROM rustlang/rust:nightly-slim as builder
+FROM rustlang/rust:nightly-alpine3.14 as builder
 WORKDIR /usr/src/app
 # Copying config/build files.
 COPY src src
 COPY Cargo.toml .
 COPY Cargo.lock .
-# Running rust-target install for the static-binary target (musl).
-RUN rustup target install x86_64-unknown-linux-musl \
+RUN apk add musl-dev \
+ # Running rust-target install for the static-binary target (musl). \
+ && rustup target install x86_64-unknown-linux-musl \
  # Installing static binary, using locked dependcies (no auto-update for anything). \
  && cargo install --locked --target=x86_64-unknown-linux-musl --path .
 
