@@ -57,7 +57,7 @@ pub fn get_latest_hash(repo_url: String, branch: String) -> Result<String, Strin
 }
 
 
-pub fn get_data_from_repo(username: String, reponame: String, repo_url: String) -> Result<Data, String> {
+pub fn get_data_from_repo(_username: String, reponame: String, repo_url: String) -> Result<Data, String> {
     //let branch   = "master";
     let branch   = "default";  // Not a real branch, just used for logging rn.
 

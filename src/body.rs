@@ -26,7 +26,7 @@ impl<'r> FromData<'r> for PostJobData {
     type Error = String;
 
     // This function is called for parsing a body of the request, when we are expecting 'PostJobData'
-    // struct as a json input for our endpoint. If this function returns 'Outcome::Failure', the request
+    // struct as a json input for our endpoint. If this function returns 'Outcome::Error', the request
     // fails (or falls through via 'Outcome::Forward'). When this function returns 'Outcome::Success', it
     // means the struct was parsed successfully (e.g. all fields are present) and Rocket framework executes
     // the endpoint code (if all other similar dependencies are resolved successfully as well).
@@ -35,7 +35,7 @@ impl<'r> FromData<'r> for PostJobData {
         let json_ct = ContentType::new("application", "json");
         // If request does not contain a valid JSON header, forward to the next handler.
         if req.content_type() != Some(&json_ct) {
-            return Outcome::Forward(data);  // Early return from the handler.
+            return Outcome::Forward((data, Status::TemporaryRedirect));  // Early return from the handler.
         }
 
         // Reading body up to the 'LIMIT' amount of bytes, and try to read it as utf-8 string.
@@ -43,9 +43,9 @@ impl<'r> FromData<'r> for PostJobData {
             // Parsing 'PostJobData' struct from the string (as json-like).
             Ok(string) => match from_str::<PostJobData>(&string) {
                 Ok(job) => return Outcome::Success(job),  // Return successfully.
-                Err(e)  => return Outcome::Failure((Status::BadRequest, format!("Failed to parse json: {}.", e))),
+                Err(e)  => return Outcome::Error((Status::BadRequest, format!("Failed to parse json: {}.", e))),
             },
-            Err(e) => return Outcome::Failure((Status::BadRequest, format!("Failed to read body: {}.", e)))
+            Err(e) => return Outcome::Error((Status::BadRequest, format!("Failed to read body: {}.", e)))
         };  // All codepaths return.
     }
 }
