@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokei::{Config, Languages, Sort};
 use std::process::{Command};
-use tempdir::TempDir;
+use tempfile;
 
 use crate::data::{Info, FileInfo, LanguageInfo, Data};
 
@@ -64,7 +64,7 @@ pub fn get_data_from_repo(_username: String, reponame: String, repo_url: String)
     info!("Starting KLOCC procedure for {} ({})", &repo_url, &branch);
 
     // Generate new random temporary directory.
-    let dir = match TempDir::new("cloned_repositories") {
+    let dir = match tempfile::Builder::new().prefix("cloned_repositories").tempdir() {
         Ok(value) => value,
         Err(e)    => return Err(format!("Failed to create temporary directory: {:?}!", e))
     };
