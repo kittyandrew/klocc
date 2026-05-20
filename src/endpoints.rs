@@ -1,15 +1,14 @@
-use prometheus::{self, TextEncoder, Encoder};
-use rocket::serde::json::{json, Value};
-use std::time::SystemTime;
-use rocket::tokio::task;
+use prometheus::{self, Encoder, TextEncoder};
 use rocket::State;
+use rocket::serde::json::{Value, json};
+use rocket::tokio::task;
+use std::time::SystemTime;
 
+use crate::body::PostJobData;
 use crate::counter::{get_data_from_repo, get_latest_hash};
+use crate::data::Database;
 use crate::prom::TOTAL_REPOSITORIES_SERVED;
 use crate::utils::expand_url;
-use crate::body::PostJobData;
-use crate::data::Database;
-
 
 // Note(andrew): To avoid spamming git server with a check for latest commit hash
 //     on every request, which is extremely slow and not productive (sending 1000
@@ -22,8 +21,7 @@ use crate::data::Database;
 //     mostly targeted to improve APIs performance, and not really to prevent all
 //     kinds of potential DoS attacks (i.e. it is much easier to just spam the API
 //     with huge amount of requests with new repository target in each of them).  @Robustness @Incomplete
-const VERIFY_MIN_INTERVAL: u64 = 60 * 5;  // @Robustness: Hopefully verifying cache integrity once in 5 minutes will not cause any problems in our case.
-
+const VERIFY_MIN_INTERVAL: u64 = 60 * 5; // @Robustness: Hopefully verifying cache integrity once in 5 minutes will not cause any problems in our case.
 
 /*
    First, we are trying to pull data from the cache (in-memory database for now),
@@ -71,7 +69,6 @@ const VERIFY_MIN_INTERVAL: u64 = 60 * 5;  // @Robustness: Hopefully verifying ca
      [?] No persistent storage is being used. Note(andrew): I don't think we need any.
 */
 
-
 // This endpoint is designed to help monitor and debug service availability. It
 // is used in 'healthcheck' routine for docker container daemon, and it is also
 // useful for getting some status information about cache storage. Note that we
@@ -83,12 +80,11 @@ pub async fn get_health(db: &State<Database>) -> Value {
     // in the storage to the response (TODO(andrew): add storage size,
     // meaning an actual amount of memory taken by cache).
     let count = db.lock().await.len();
-    return json!({
+    json!({
         "status": 200, "message_code": "info_health_ok", "message": "KLOCC is healthy!",
         "data": {"cached_count": count},
     })
 }
-
 
 // Native metrics export support for Prometheus.
 #[get("/metrics")]
@@ -96,10 +92,9 @@ pub async fn get_metrics(encoder: &State<TextEncoder>) -> String {
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();
 
-    encoder.encode(&metric_families, &mut buffer).unwrap();  // @UnsafeUnwrap
-    return String::from_utf8(buffer).unwrap();  // @UnsafeUnwrap
+    encoder.encode(&metric_families, &mut buffer).unwrap(); // @UnsafeUnwrap
+    String::from_utf8(buffer).unwrap() // @UnsafeUnwrap
 }
-
 
 #[post("/jobs", format = "application/json", data = "<data>")]
 pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
@@ -110,7 +105,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     the only place where we pattern match it.
     let repo_url = match expand_url(&data.provider, &data.username, &data.reponame) {
         Ok(value) => value,
-        Err(msg)  => return json!({ "status": 400, "message_code": "err_bad_service", "message": msg })  // Early return from the handler.
+        Err(msg) => {
+            return json!({ "status": 400, "message_code": "err_bad_service", "message": msg });
+        } // Early return from the handler.
     };
 
     // TODO(andrew): Since we are getting 'data' here, store it outside the code block, because
@@ -127,18 +124,18 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     (either intentional or just an unexpected amount of continuous load, hammering small
     //     range of cached repositories).
     {
-        let guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
+        let guard = db.lock().await; // It is important for us that this lock will be freed after the code block.
 
         // @SafeUnwrap: Data has to be present to continue, so we use safe unwrap condition.
         if let Some(data) = guard.get(&repo_url) {
-            let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
+            let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // Get current system time. @UnsafeUnwrap
 
             if (data.verified_time + VERIFY_MIN_INTERVAL) >= curr.as_secs() {
                 return json!({
                     "status": 200, "message_code": "info_success_cached_recent",
                     "message": "Your request was satisfied instantly, because it was found in cache.",
                     "data": data,
-                });  // Early return from the handler.
+                }); // Early return from the handler.
             }
         }
     }
@@ -147,12 +144,18 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     {
         // Preparing values to move into the thread.
         let _repo_url = repo_url.clone();
-        let _target   = "HEAD".to_string();
+        let _target = "HEAD".to_string();
         // This method will return a hash of the latest commit in the repository for us to save for later,
         // or an error if the repository doesn't exist (or it's not available).
-        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {  // @UnsafeUnwrap @Robustness: Thread can fail?
+        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target))
+            .await
+            .unwrap()
+        {
+            // @UnsafeUnwrap @Robustness: Thread can fail?
             Ok(value) => value,
-            Err(msg)  => return json!({"status": 400, "message_code": "err_failed_to_fetch_from_repo", "message": msg})  // Early return from the handler.
+            Err(msg) => {
+                return json!({"status": 400, "message_code": "err_failed_to_fetch_from_repo", "message": msg});
+            } // Early return from the handler.
         };
     }
 
@@ -166,7 +169,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     have been pushed to the repository since our last analysis, so there is some chance
         //     (although we don't know, and probably don't have a way to know, exactly) that stored
         //     result is inaccurate.
-        let mut guard = db.lock().await;  // It is important for us that this lock will be freed after the code block.
+        let mut guard = db.lock().await; // It is important for us that this lock will be freed after the code block.
 
         // @SafeUnwrap: Data has to be present to continue, so we use safe unwrap condition.
         if let Some(data) = guard.get_mut(&repo_url) {
@@ -175,14 +178,14 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
                 // Note(andrew): Before returning, we need to get current system time and update cached
                 //     data field with it, so we will be able to tell on the next request with the same
                 //     cached target whether we updated it recently enough and can respond immediately.
-                let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();  // Get current system time. @UnsafeUnwrap
+                let curr = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // Get current system time. @UnsafeUnwrap
                 data.verified_time = curr.as_secs();
 
                 return json!({
                     "status": 200, "message_code": "info_success_cached",
                     "message": "Your request was satisfied instantly, because it was found in cache.",
                     "data": data,
-                });  // Early return from the handler.
+                }); // Early return from the handler.
             }
         }
     }
@@ -190,7 +193,7 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     {
         // Note(andrew): Here we are copying values from our input strings, because we are going to
         // pass them down into the thread, which will own them from now on (but we might want to use
-        // original values later in the code). 
+        // original values later in the code).
         let _username = data.username.clone();
         let _reponame = data.reponame.clone();
         let _repo_url = repo_url.clone();
@@ -200,22 +203,25 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
         //     finishes (wait is asynchronous). Which, in practice, means that the server can process
         //     other requests in the meantime and do other useful work, while we are waiting for download
         //     or result of analysis (everything inside dispatched routine below).
-        let result = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url)).await.unwrap();  // @PotentialPanic @Robustness: Thread can fail?
+        let result = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url))
+            .await
+            .unwrap(); // @PotentialPanic @Robustness: Thread can fail?
 
         // Note(andrew): Our klocc procedure returns a result, where different errors and edge-cases are
         //     handled, explained and propagated in a form of an error message (as a string), so here we
         //     are doing a check for that in our result. If we confirmed that this is indeed an error,
         //     unpack the error message and pass it directly back to the callee.
         if let Err(message) = result {
-            return json!({ "status": 500, "message_code": "err_counter_failed", "message": message });  // Early return from the handler.
+            return json!({ "status": 500, "message_code": "err_counter_failed", "message": message });
+            // Early return from the handler.
         }
 
-        let mut data = result.unwrap();  // @SafeUnwrap: Data must be present, because we just checked for the error.
+        let mut data = result.unwrap(); // @SafeUnwrap: Data must be present, because we just checked for the error.
         data.hash = hash;
         // Note(andrew): Await and lock temporary mutex guard value, that is being used immediately in-place
         //     to insert values into the cache, and then, in the next step after insert, the guard is freed
         //     and the cache storage is unlocked for other parallel running jobs.
-        db.lock().await.insert(repo_url.clone(), data);  // We are safe to unwrap here, because we check that value is ok right above.
+        db.lock().await.insert(repo_url.clone(), data); // We are safe to unwrap here, because we check that value is ok right above.
 
         // Tracking repository statistics.
         TOTAL_REPOSITORIES_SERVED.inc();
@@ -225,9 +231,9 @@ pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
     //     reference, and safely unwrap it directly into the json, because we know it must be present,
     //     as we just added it right above this code block (we only reach here after adding new data).
     let guard = db.lock().await;
-    return json!({
+    json!({
         "status": 200, "message_code": "info_success_generated",
         "message": "The repo was analyzed successfully and result was stored for later reference.",
         "data": guard.get(&repo_url).unwrap(),  // @SafeUnwrap: Data must be present, because we inserted it previously.
-    });
+    })
 }

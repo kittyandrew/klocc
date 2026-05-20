@@ -1,0 +1,94 @@
+name: ci
+
+# Token-free quality gates run on every PR and push. The secret-bearing Attic
+# build/cache job is restricted to the default branch after those gates pass.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: format + lint + test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@21a544727d0c62386e78b4befe52d19ad12692e3
+
+      - name: GitHub Actions lint (actionlint)
+        run: nix develop -c actionlint
+
+      - name: GitHub Actions security audit (zizmor)
+        run: nix develop -c zizmor .github/workflows
+
+      - name: Nix format (alejandra)
+        run: nix develop -c alejandra -c .
+
+      - name: Nix lint (deadnix)
+        run: nix develop -c deadnix flake.nix
+
+      - name: Flake check
+        run: nix flake check --print-build-logs
+
+      - name: Build backend package
+        run: nix build .#klocc --print-build-logs
+
+      - name: Build frontend package
+        run: nix build .#klocc-frontend --print-build-logs
+
+      - name: Build Docker image
+        run: nix build .#docker-image --print-build-logs
+
+      - name: Rust format
+        run: nix develop -c cargo fmt --check
+
+      - name: Rust lint
+        run: nix develop -c cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Rust test
+        run: nix develop -c cargo test --all-targets --all-features --locked
+
+      - name: Rust build
+        run: nix develop -c cargo build --all-targets --all-features --locked
+
+  build:
+    name: nix build + cache
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@21a544727d0c62386e78b4befe52d19ad12692e3
+
+      - name: Setup Attic cache
+        uses: ryanccn/attic-action@5635a15ef0c5462194ffbd05d1daeddc74625c3a
+        with:
+          endpoint: ${{ vars.ATTIC_ENDPOINT }}
+          cache: general
+          token: ${{ secrets.ATTIC_GENERAL_PUSH_TOKEN }}
+
+      - name: Flake check
+        run: nix flake check --print-build-logs
+
+      - name: Build backend package
+        run: nix build .#klocc --print-build-logs
+
+      - name: Build frontend package
+        run: nix build .#klocc-frontend --print-build-logs
+
+      - name: Build Docker image
+        run: nix build .#docker-image --print-build-logs

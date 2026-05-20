@@ -1,15 +1,13 @@
-use rocket::serde::{json::from_str, Deserialize, Serialize};
-use rocket::data::{Outcome, FromData, ByteUnit};
-use rocket::http::{Status, ContentType};
-use rocket::{Request, Data};
-
+use rocket::data::{ByteUnit, FromData, Outcome};
+use rocket::http::{ContentType, Status};
+use rocket::serde::{Deserialize, Serialize, json::from_str};
+use rocket::{Data, Request};
 
 // Note(andrew): Use this constant as a hard limit for the buffer that reads request
 //     body into memory, since this is more than enough for given arguments, and all
 //     bigger payloads are probably an attempt to pass malicious data or to perform
 //     a DoS attack.
 const LIMIT: ByteUnit = ByteUnit::Byte(4096);
-
 
 // Use this struct as a typed input for the POST /jobs endpoint.
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,7 +17,6 @@ pub struct PostJobData {
     pub reponame: String,
     pub provider: String,
 }
-
 
 #[rocket::async_trait]
 impl<'r> FromData<'r> for PostJobData {
@@ -35,18 +32,21 @@ impl<'r> FromData<'r> for PostJobData {
         let json_ct = ContentType::new("application", "json");
         // If request does not contain a valid JSON header, forward to the next handler.
         if req.content_type() != Some(&json_ct) {
-            return Outcome::Forward((data, Status::TemporaryRedirect));  // Early return from the handler.
+            return Outcome::Forward((data, Status::TemporaryRedirect)); // Early return from the handler.
         }
 
         // Reading body up to the 'LIMIT' amount of bytes, and try to read it as utf-8 string.
         match data.open(LIMIT).into_string().await {
             // Parsing 'PostJobData' struct from the string (as json-like).
             Ok(string) => match from_str::<PostJobData>(&string) {
-                Ok(job) => return Outcome::Success(job),  // Return successfully.
-                Err(e)  => return Outcome::Error((Status::BadRequest, format!("Failed to parse json: {}.", e))),
+                Ok(job) => return Outcome::Success(job), // Return successfully.
+                Err(e) => {
+                    return Outcome::Error((Status::BadRequest, format!("Failed to parse json: {}.", e)));
+                }
             },
-            Err(e) => return Outcome::Error((Status::BadRequest, format!("Failed to read body: {}.", e)))
-        };  // All codepaths return.
+            Err(e) => {
+                return Outcome::Error((Status::BadRequest, format!("Failed to read body: {}.", e)));
+            }
+        }; // All codepaths return.
     }
 }
-

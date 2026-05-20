@@ -1,16 +1,15 @@
-#[macro_use] extern crate rocket;
-use rocket_cors::{AllowedHeaders, AllowedOrigins};
+#[macro_use]
+extern crate rocket;
 use prometheus::TextEncoder;
 use rocket::http::Method;
+use rocket_cors::{AllowedHeaders, AllowedOrigins};
 
-
-mod data;
 mod body;
+mod counter;
+mod data;
+mod endpoints;
 mod prom;
 mod utils;
-mod counter;
-mod endpoints;
-
 
 #[launch]
 fn rocket() -> _ {
@@ -45,14 +44,16 @@ fn rocket() -> _ {
         //     at this. On the other note, is it bad that our endpoints have either GET or POST, because this
         //     probably means that we accept 'GET' AND 'POST' *everywhere*?  @Robustness @Question
         allowed_methods: vec![Method::Get, Method::Post]
-        // Note(andrew): Notice all the transformation that is done here. The thing is that rocket_cors casts
-        //     rocket::http::Method(s) into their internal structure type, and also it is using hashset instead
-        //     of simple array. So to make this easier, first we write out our wanted method above in a 'vector'
-        //     and then using this code to iterate over it, mapping each instance of a Method into the struct
-        //     rocket_cors expects (From::from will call trait that is implemented by the rocket_cors itself!),
-        //     and finally, '.collect()' allows to convert iterator into expected type (hashset-like structure
-        //     in the case of rocket_cors).
-        .into_iter().map(From::from).collect(),
+            // Note(andrew): Notice all the transformation that is done here. The thing is that rocket_cors casts
+            //     rocket::http::Method(s) into their internal structure type, and also it is using hashset instead
+            //     of simple array. So to make this easier, first we write out our wanted method above in a 'vector'
+            //     and then using this code to iterate over it, mapping each instance of a Method into the struct
+            //     rocket_cors expects (From::from will call trait that is implemented by the rocket_cors itself!),
+            //     and finally, '.collect()' allows to convert iterator into expected type (hashset-like structure
+            //     in the case of rocket_cors).
+            .into_iter()
+            .map(From::from)
+            .collect(),
         // Note(andrew): Since we are handling basicauth with an external webserver (alongside with SSL certs
         //     and domain stuff) as our reverse proxy, I'm not sure that we actually need this. But anyway, we
         //     probably do, so don't remove this for now, even though there is not authorization in the source
@@ -71,7 +72,8 @@ fn rocket() -> _ {
         ..Default::default()
     }
     // There is some magic going on here, converting our config into a rocket fairing.  @Robustness
-    .to_cors().unwrap();
+    .to_cors()
+    .unwrap();
 
     // Since there is a hack used to lazy load those constants, we want to reset them here,
     // so they are immediately usable from start (they will be recognized by the prometheus
@@ -81,13 +83,8 @@ fn rocket() -> _ {
 
     rocket::build()
         // Register our endpoints with /api/ root prefix.
-        .mount("/api", routes![
-            endpoints::post_klocc_job,
-            endpoints::get_health,
-        ])
-        .mount("/", routes![
-            endpoints::get_metrics,
-        ])
+        .mount("/api", routes![endpoints::post_klocc_job, endpoints::get_health,])
+        .mount("/", routes![endpoints::get_metrics,])
         // Managing cache mutex. This allows rocket to pass this instance to us in any handler where we need
         // it, using rocket's internal 'State' wrapper.
         .manage(data::init_db())
@@ -98,4 +95,3 @@ fn rocket() -> _ {
         // Adding Prometheus metadata collection middleware.
         .attach(prom::PrometheusCollection)
 }
-

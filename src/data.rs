@@ -1,8 +1,7 @@
+use rocket::serde::Serialize;
 use rocket::tokio::sync::Mutex;
 use std::collections::HashMap;
-use rocket::serde::Serialize;
 use std::time::SystemTime;
-
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -12,13 +11,11 @@ pub struct Info {
     pub blanks: u32,
 }
 
-
 impl Info {
     pub fn new(code: u32, comments: u32, blanks: u32) -> Self {
-        Self { code: code, comments: comments, blanks: blanks }
+        Self { code, comments, blanks }
     }
 }
-
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -30,13 +27,17 @@ pub struct FileInfo {
     pub blanks: u32,
 }
 
-
 impl FileInfo {
     pub fn new(name: String, path: String, code: u32, comments: u32, blanks: u32) -> Self {
-        Self { name: name, path: path, code: code, comments: comments, blanks: blanks }
+        Self {
+            name,
+            path,
+            code,
+            comments,
+            blanks,
+        }
     }
 }
-
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -46,13 +47,15 @@ pub struct LanguageInfo {
     pub files: Vec<FileInfo>,
 }
 
-
 impl LanguageInfo {
     pub fn new(name: String, total: Info) -> Self {
-        Self { name: name, total: total, files: Vec::new() }
+        Self {
+            name,
+            total,
+            files: Vec::new(),
+        }
     }
 }
-
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -65,7 +68,6 @@ pub struct Data {
     pub total: Info,
     pub languages: Vec<LanguageInfo>,
 }
-
 
 impl Data {
     pub fn new(repo: String, total: Info) -> Self {
@@ -83,16 +85,15 @@ impl Data {
         Self {
             creation_time: now.as_secs(),
             verified_time: now.as_secs(),
-            repo: repo, total: total,
+            repo,
+            total,
             languages: Vec::new(),
             hash: "".to_string(),
-         }
+        }
     }
 }
 
-
 pub type Database = Mutex<HashMap<String, Data>>;
-
 
 // A helper function to create an empty instance of the hashmap-mutex structure, which
 // is used as in-memory storage.
@@ -100,4 +101,3 @@ pub fn init_db() -> Database {
     let storage = HashMap::<String, Data>::new();
     Mutex::new(storage)
 }
-
