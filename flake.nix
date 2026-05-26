@@ -52,7 +52,7 @@
             rev = "0096318db1a3c5a75d5b8257163a742179a71b0e";
             hash = "sha256-IB7H4z5Vip29+eu0ZjyZvy6E+6uQ2yTQ3zpJ8T8mnP8=";
           };
-          nodejs = pkgs.nodejs_20;
+          nodejs = pkgs.nodejs;
           npmDepsHash = "sha256-HU1wX+Lgl097b3YVfdKN5g3dACraow97fu+mrLdYlkg=";
           NODE_OPTIONS = "--openssl-legacy-provider";
 
