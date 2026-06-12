@@ -1,0 +1,11 @@
+[package]
+name = "klocc-artifact"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rusqlite.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nix-system-treemap Current State Overview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121a2f;
+      --panel-2: #17213a;
+      --text: #edf3ff;
+      --muted: #9eacc7;
+      --line: #2b3a5f;
+      --accent: #8fd3ff;
+      --accent-2: #a8f0c6;
+      --warn: #ffd08a;
+      --bad: #ff9aa8;
+      --code: #07111f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(143, 211, 255, 0.18), transparent 32rem),
+        radial-gradient(circle at top right, rgba(168, 240, 198, 0.10), transparent 26rem),
+        var(--bg);
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 48px 0 72px;
+    }
+
+    header {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 32px;
+    }
+
+    h1, h2, h3 { line-height: 1.1; margin: 0; }
+    h1 { font-size: clamp(2.4rem, 6vw, 5.6rem); letter-spacing: -0.06em; }
+    h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-bottom: 16px; }
+    h3 { font-size: 1.05rem; color: var(--accent); margin-bottom: 8px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+
+    .lede {
+      max-width: 840px;
+      font-size: clamp(1.05rem, 2vw, 1.3rem);
+      color: #cfdbf5;
+    }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: rgba(18, 26, 47, 0.8);
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    section {
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(18, 26, 47, 0.78);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    }
+
+    .metric {
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--accent-2);
+      margin-bottom: 8px;
+    }
+
+    .label { color: var(--muted); font-size: 0.95rem; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    @media (max-width: 820px) {
+      .two-col { grid-template-columns: 1fr; }
+      main { width: min(100vw - 20px, 1180px); padding-top: 28px; }
+      section { padding: 18px; border-radius: 18px; }
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 14px;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th { color: var(--accent); background: rgba(7, 17, 31, 0.7); }
+    td { color: #dbe6fb; }
+    tr:last-child td { border-bottom: 0; }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92rem;
+    }
+
+    code {
+      color: #d9f4ff;
+      background: rgba(7, 17, 31, 0.72);
+      border: 1px solid rgba(143, 211, 255, 0.14);
+      border-radius: 6px;
+      padding: 1px 5px;
+    }
+
+    pre {
+      margin: 12px 0 0;
+      padding: 16px;
+      border-radius: 14px;
+      overflow: auto;
+      color: #d9f4ff;
+      background: var(--code);
+      border: 1px solid var(--line);
+    }
+
+    .status-good { color: var(--accent-2); }
+    .status-warn { color: var(--warn); }
+    .status-bad { color: var(--bad); }
+    .small { font-size: 0.92rem; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(143, 211, 255, 0.08);
+      color: #dbe6fb;
+    }
+
+    .mock {
+      border: 1px solid #414559;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #303446;
+      box-shadow: inset 0 0 0 1px rgba(198, 208, 245, 0.04);
+    }
+
+    .mock-top {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-height: 42px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #414559;
+      background: #292c3c;
+      color: #c6d0f5;
+      font-size: 0.82rem;
+    }
+
+    .mock-select, .mock-input {
+      border: 1px solid #51576d;
+      border-radius: 9px;
+      padding: 5px 8px;
+      background: #232634;
+      color: #c6d0f5;
+    }
+
+    .mock-body {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      min-height: 300px;
+    }
+
+    .mock-side {
+      padding: 12px;
+      border-right: 1px solid #414559;
+      background: #292c3c;
+      color: #a5adce;
+      font-size: 0.78rem;
+    }
+
+    .mock-side strong { color: #c6d0f5; }
+
+    .mock-stage {
+      padding: 40px 80px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(202, 158, 230, 0.18), transparent 22rem),
+        radial-gradient(circle at 90% 70%, rgba(129, 200, 190, 0.14), transparent 24rem),
+        #303446;
+    }
+
+    .treemap {
+      display: grid;
+      grid-template-columns: 2.4fr 1.2fr 0.9fr;
+      grid-template-rows: 1.5fr 1fr 0.8fr;
+      gap: 6px;
+      height: 220px;
+    }
+
+    .rect {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid rgba(198, 208, 245, 0.22);
+      border-radius: 10px;
+      color: #232634;
+      font-weight: 700;
+      font-size: 0.78rem;
+      overflow: hidden;
+    }
+
+    .runtime { background: #81c8be; }
+    .build { background: #ca9ee6; }
+    .generated { background: #e5c890; }
+    .shared { background: #8caaee; }
+    .unique { background: #a6d189; }
+    .tiny { font-size: 0.68rem; opacity: 0.9; }
+
+    .open-screen {
+      display: grid;
+      place-items: center;
+      min-height: 300px;
+      padding: 48px;
+      background: #303446;
+    }
+
+    .open-card {
+      width: min(520px, 100%);
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+      border: 1px solid #51576d;
+      border-radius: 18px;
+      background: #292c3c;
+    }
+
+    .buttonish {
+      border: 1px solid #8caaee;
+      border-radius: 10px;
+      padding: 9px 12px;
+      color: #c6d0f5;
+      background: rgba(140, 170, 238, 0.12);
+      text-align: center;
+    }
+
+    @media (max-width: 820px) {
+      .mock-body { grid-template-columns: 1fr; }
+      .mock-side { border-right: 0; border-bottom: 1px solid #414559; }
+      .mock-stage { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="pill-row">
+        <span class="pill">Generated: May 21, 2026</span>
+        <span class="pill">Artifact: <code>/tmp/klocc-self.sqlite</code></span>
+        <span class="pill">Scanner: <code>nix-system-treemap</code></span>
+      </div>
+      <h1>Current State Overview</h1>
+      <p class="lede">
+        The project now has a Rust CLI that performs one complete Nix scan path: it resolves a root
+        installable, records the runtime closure, walks the full discovered derivation build graph,
+        realizes source store paths, counts LOC with <code>tokei</code>, and writes a normalized SQLite
+        artifact for future native UI exploration.
+      </p>
+    </header>
+
+    <section>
+      <h2>Executive Summary</h2>
+      <div class="grid">
+        <div class="card"><div class="metric">5</div><div class="label">runtime store paths</div></div>
+        <div class="card"><div class="metric">1,895</div><div class="label">source units discovered</div></div>
+        <div class="card"><div class="metric">2,108</div><div class="label">Nix derivations stored</div></div>
+        <div class="card"><div class="metric">232.1M</div><div class="label">counted code LOC</div></div>
+        <div class="card"><div class="metric">10,249</div><div class="label">derivation input edges</div></div>
+        <div class="card"><div class="metric">48,887</div><div class="label">source dependency edges</div></div>
+        <div class="card"><div class="metric">26</div><div class="label">runtime-linked source units</div></div>
+        <div class="card"><div class="metric">1,869</div><div class="label">build-time-only source units</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What The Scan Produces</h2>
+      <div class="two-col">
+        <div class="card">
+          <h3>Runtime Graph</h3>
+          <p>Represents realized output paths needed to run the selected installable.</p>
+          <p>Stored in <code>store_path</code>, <code>runtime_edge</code>, <code>runtime_rollup</code>, and <code>ownership_rollup</code>.</p>
+          <pre><code>klocc-0.1.6
+`-- glibc-2.42-61
+    |-- libidn2-2.3.8
+    |   `-- libunistring-1.4.2
+    `-- xgcc-15.2.0-libgcc</code></pre>
+        </div>
+        <div class="card">
+          <h3>Build and Source Graph</h3>
+          <p>Represents the full discovered derivation graph and the source units introduced by it.</p>
+          <p>Stored in <code>derivation*</code>, <code>source_unit</code>, <code>source_dependency</code>, and <code>source_rollup</code>.</p>
+          <pre><code>source_unit
+source_dependency
+source_rollup
+derivation
+derivation_input
+derivation_output
+derivation_source_input
+derivation_source_unit</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Native GPUI Direction</h2>
+      <div class="callout">
+        The native app is a viewer only. It opens an existing SQLite artifact, validates the current schema strictly, and renders treemap views from precomputed DB data. It does not run Nix scans.
+      </div>
+      <table>
+        <thead><tr><th>Requirement</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><td>Startup</td><td>First screen has a manual path field and a system file picker button.</td></tr>
+          <tr><td>After load</td><td>Go directly to the treemap screen. No dashboard gate.</td></tr>
+          <tr><td>Default metric</td><td>Rectangle area is source code LOC.</td></tr>
+          <tr><td>Default color</td><td>Runtime-linked versus build-time-only.</td></tr>
+          <tr><td>Controls</td><td>Top row mode selectors for metric, layer, completeness, unique/shared visibility.</td></tr>
+          <tr><td>Navigation</td><td>Left click drills into direct dependencies. Right click goes back.</td></tr>
+          <tr><td>Details</td><td>Left hover panel shows stats and provenance for the rectangle under the mouse.</td></tr>
+          <tr><td>Scale</td><td>Design for package scans and larger NixOS-scale scans from the start.</td></tr>
+          <tr><td>Style</td><td>Catppuccin Frappe: base <code>#303446</code>, mantle <code>#292c3c</code>, text <code>#c6d0f5</code>, mauve <code>#ca9ee6</code>, blue <code>#8caaee</code>, teal <code>#81c8be</code>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Hierarchy Options, Visually</h2>
+      <p>Hierarchy means how the DAG data is projected into nested treemap rectangles. The same source units can be grouped different ways without changing the underlying DB.</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Source kind -> unit</h3>
+          <p>Top-level rectangles are categories like Cargo crates, fixed-output sources, patches, generated outputs. Inside each are individual source units.</p>
+          <pre><code>cargo-vendored-crate
+  rocket
+  tokei
+fixed-output-source
+  gcc.tar.xz
+  bash.tar.gz
+patch-source
+  bash53-001</code></pre>
+        </div>
+        <div class="card">
+          <h3>Runtime package -> source</h3>
+          <p>Top-level rectangles are runtime outputs like klocc or glibc. Inside are the sources attributed to that output and its build graph.</p>
+          <pre><code>klocc
+  workspace source
+  cargo vendor deps
+  glibc source
+  bootstrap inputs</code></pre>
+        </div>
+        <div class="card">
+          <h3>Derivation tree -> source</h3>
+          <p>Top-level shape follows Nix build derivations. This is most provenance-accurate, but can be visually noisy for bootstrap graphs.</p>
+          <pre><code>klocc.drv
+  cargo artifacts drv
+  stdenv-linux.drv
+    bash.drv
+    gcc.drv</code></pre>
+        </div>
+        <div class="card">
+          <h3>Ecosystem -> package</h3>
+          <p>Top-level rectangles group by ecosystem: cargo, nix, cargo-workspace. Useful for broad composition, less precise for provenance.</p>
+          <pre><code>cargo
+  rocket
+  prometheus
+nix
+  glibc
+  gcc
+cargo-workspace
+  klocc</code></pre>
+        </div>
+      </div>
+      <p class="small">Recommended first default: <code>source kind -> unit</code>, because it is simple, fast to explain, and makes generated/fixed-output/patch categories visible.</p>
+    </section>
+
+    <section>
+      <h2>Native UI Mock States</h2>
+      <div class="grid">
+        <div class="mock">
+          <div class="mock-top">State 1: open artifact</div>
+          <div class="open-screen">
+            <div class="open-card">
+              <strong>Open scan artifact</strong>
+              <div class="mock-input">/tmp/klocc-self.sqlite</div>
+              <div class="buttonish">Choose SQLite artifact...</div>
+              <p class="small">Manual path first, system picker second. Loading validates schema strictly.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock">
+          <div class="mock-top">
+            <span class="mock-select">metric: source LOC</span>
+            <span class="mock-select">color: runtime/build</span>
+            <span class="mock-select">view: all</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-side"><strong>Hover</strong><br>No rectangle hovered.<br><br>0 unknown sources<br>271 generated outputs</div>
+            <div class="mock-stage">
+              <div class="treemap">
+                <div class="rect build" style="grid-row: span 2;">fixed-output-source <span>69.5M</span></div>
+                <div class="rect build">cargo crates <span>7.3M</span></div>
+                <div class="rect runtime">runtime-linked <span>13.7M</span></div>
+                <div class="rect generated">generated <span>0</span></div>
+                <div class="rect shared">shared deps <span>146M</span></div>
+                <div class="rect unique">unique deps <span>14M</span></div>
+                <div class="rect build tiny">patches</div>
+                <div class="rect build tiny">scripts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock">
+          <div class="mock-top">
+            <span class="mock-select">metric: source LOC</span>
+            <span class="mock-select">color: source kind</span>
+            <span class="mock-select">view: build-only</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-side"><strong>Hovered</strong><br>bash-5.3.tar.gz<br>kind: fixed-output-source<br>layer: build-time-only<br>code: 396,775 LOC<br>introduced by: bash.drv</div>
+            <div class="mock-stage">
+              <div class="treemap">
+                <div class="rect build" style="grid-column: span 2;">gcc source <span>114.1M</span></div>
+                <div class="rect build">glibc source <span>1.6M</span></div>
+                <div class="rect build">bash source <span>396k</span></div>
+                <div class="rect generated">generated bootstrap <span>271 items</span></div>
+                <div class="rect build tiny">patch set</div>
+                <div class="rect build tiny">kaem scripts</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock">
+          <div class="mock-top">
+            <span class="mock-select">metric: unique LOC</span>
+            <span class="mock-select">color: runtime/build</span>
+            <span class="mock-select">view: unique only</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-side"><strong>Drilled into</strong><br>klocc source dependencies<br><br>Right click: back<br>Left click: drill into direct deps</div>
+            <div class="mock-stage">
+              <div class="treemap">
+                <div class="rect runtime" style="grid-row: span 2;">klocc workspace <span>4,023</span></div>
+                <div class="rect unique">rocket_cors <span>3,790</span></div>
+                <div class="rect unique">tokei <span>6,028</span></div>
+                <div class="rect unique">prometheus <span>8,549</span></div>
+                <div class="rect generated tiny">generated hidden from LOC area</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Current Artifact Health</h2>
+      <table>
+        <thead><tr><th>Metric</th><th>Value</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>runtime_paths</code></td><td>5</td><td>Runtime closure outputs for the self-scan package.</td></tr>
+          <tr><td><code>source_units</code></td><td>1,895</td><td>Source trees, tarballs, patches, scripts, vendors, generated outputs, and fixed-output fetches.</td></tr>
+          <tr><td><code>source_units_with_loc</code></td><td>1,617</td><td>Sources successfully counted by <code>tokei</code>.</td></tr>
+          <tr><td><code>unknown_derivation_sources</code></td><td>0</td><td>No remaining source-less derivations are mislabeled as unknown in the self-scan.</td></tr>
+          <tr><td><code>generated_derivation_outputs</code></td><td>271</td><td>Bootstrap intermediates generated from input derivations, not direct source fetches.</td></tr>
+          <tr><td><code>derivations</code></td><td>2,108</td><td>Parsed and persisted Nix derivations.</td></tr>
+          <tr><td><code>derivation_input_edges</code></td><td>10,249</td><td>First-class build input derivation edges.</td></tr>
+          <tr><td><code>derivation_source_inputs</code></td><td>3,632</td><td>Raw source input paths from derivation metadata.</td></tr>
+          <tr><td><code>derivation_source_unit_links</code></td><td>2,931</td><td>Links from derivations to normalized source units.</td></tr>
+          <tr><td><code>loc_persistent_cache_hits</code></td><td>1,294</td><td>LOC counts reused from <code>~/.cache/nix-system-treemap/loc-cache.sqlite</code>.</td></tr>
+          <tr><td><code>loc_memory_cache_hits</code></td><td>7,492</td><td>Repeated source measurements avoided within a single scan.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Source Breakdown</h2>
+      <table>
+        <thead><tr><th>Source kind</th><th>Status</th><th>Count</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>source-like-derivation-output</code></td><td class="status-good">available</td><td>342</td><td>Outputs that look like source paths.</td></tr>
+          <tr><td><code>cargo-vendored-crate</code></td><td class="status-good">available</td><td>321</td><td>Rust crates from the Cargo vendor graph.</td></tr>
+          <tr><td><code>fixed-output-source</code></td><td class="status-good">realized</td><td>319</td><td>Fixed-output fetches realized and counted.</td></tr>
+          <tr><td><code>generated-derivation-output</code></td><td class="status-warn">generated-from-inputs</td><td>271</td><td>Bootstrap intermediates generated from other derivations.</td></tr>
+          <tr><td><code>derivation-env-src</code></td><td class="status-good">available</td><td>192</td><td>Source discovered via derivation environment fields.</td></tr>
+          <tr><td><code>nix-input-src</code></td><td class="status-good">available</td><td>149</td><td>Raw source inputs from recursive derivation metadata.</td></tr>
+          <tr><td><code>patch-source</code></td><td class="status-good">available</td><td>121</td><td>Patches and patch-like inputs inferred and counted where possible.</td></tr>
+          <tr><td><code>fixed-output-source</code></td><td class="status-good">available</td><td>97</td><td>Already-realized fixed-output source fetches.</td></tr>
+          <tr><td><code>patch-source</code></td><td class="status-good">realized</td><td>39</td><td>Missing patch paths realized from the Nix store.</td></tr>
+          <tr><td><code>fixed-output-fetch</code></td><td class="status-good">realized</td><td>4</td><td>Fixed-output fetches without source-like filenames.</td></tr>
+          <tr><td><code>patch-source</code></td><td class="status-bad">missing</td><td>4</td><td>Known but not currently available or countable.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Examples</h2>
+      <div class="two-col">
+        <div class="card">
+          <h3>Generate A Scan</h3>
+          <pre><code>rm -f /tmp/klocc-self.sqlite
+nix develop -c cargo run -p nix-system-treemap -- \
+  scan ".#packages.x86_64-linux.default" \
+  --out /tmp/klocc-self.sqlite</code></pre>
+        </div>
+        <div class="card">
+          <h3>Inspect The Artifact</h3>
+          <pre><code>nix develop -c cargo run -p nix-system-treemap -- \
+  stats /tmp/klocc-self.sqlite
+
+nix develop -c cargo run -p nix-system-treemap -- \
+  check /tmp/klocc-self.sqlite</code></pre>
+        </div>
+        <div class="card">
+          <h3>Tree Views</h3>
+          <pre><code>nix develop -c cargo run -p nix-system-treemap -- \
+  tree /tmp/klocc-self.sqlite \
+  --max-depth 2 \
+  --source-filter build
+
+# filters: all, runtime, build, unique, shared</code></pre>
+        </div>
+        <div class="card">
+          <h3>SQLite Queries</h3>
+          <pre><code>nix shell nixpkgs#sqlite -c sqlite3 /tmp/klocc-self.sqlite '
+select metric, value
+from scan_health
+order by metric;
+
+select runtime_linked, build_time_only, count(*), sum(own_code_loc)
+from source_rollup
+group by runtime_linked, build_time_only;
+'</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Design Decisions Locked In</h2>
+      <div class="callout">
+        There is one complete scan path. No runtime-only shortcut mode. Runtime, build-time, unique,
+        and shared views are filters over the complete SQLite artifact.
+      </div>
+      <table>
+        <thead><tr><th>Decision</th><th>Current Choice</th></tr></thead>
+        <tbody>
+          <tr><td>Machine format</td><td>SQLite only. Extra JSON output is out of scope.</td></tr>
+          <tr><td>LOC engine</td><td><code>tokei</code> with policy hash <code>tokei-v14-source-graph-v2</code>.</td></tr>
+          <tr><td>Cache identity</td><td>Nix store path plus counter policy first.</td></tr>
+          <tr><td>Source realization</td><td>Automatic for discovered source store paths.</td></tr>
+          <tr><td>Derivation graph</td><td>Persisted as first-class normalized tables.</td></tr>
+          <tr><td>Unknowns</td><td>Recorded honestly and linked back to derivations.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Known Limitations</h2>
+      <ul>
+        <li><strong>No unknown derivation sources remain in the self-scan.</strong> The previous unknown bucket is now split into concrete source/fetch classifications and generated bootstrap intermediates.</li>
+        <li><strong>271 generated derivation outputs remain.</strong> These are not direct source units; they are bootstrap intermediates generated from input derivations.</li>
+        <li><strong>Unique/shared source rollups are graph based.</strong> They are useful for hiding reused dependencies, but they are not yet a formal Nix ownership algorithm for source LOC.</li>
+        <li><strong>Persistent LOC cache is local.</strong> It lives under <code>~/.cache/nix-system-treemap</code> and is keyed by store path and policy, not content hash yet.</li>
+        <li><strong>Source inference is heuristic.</strong> It now handles patches and common source/script extensions, but more Nixpkgs conventions need to be learned.</li>
+        <li><strong>Native UI is still deferred.</strong> The artifact is being shaped so a later GPUI app can consume it directly.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Next Useful Work</h2>
+      <ol>
+        <li>Deeply investigate the remaining <code>unknown-derivation-source</code> rows by derivation family.</li>
+        <li>Add richer derivation/source health checks to fail only on real corruption, not known metadata gaps.</li>
+        <li>Improve tree rendering for large graphs with grouping, limits, and source-kind summaries.</li>
+        <li>Start native UI data loading against this SQLite schema once CLI artifact quality stabilizes.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

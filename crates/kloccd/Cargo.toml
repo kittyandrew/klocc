@@ -1,0 +1,12 @@
+[package]
+name = "kloccd"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lazy_static.workspace = true
+prometheus.workspace = true
+rocket.workspace = true
+rocket_cors.workspace = true
+tempfile.workspace = true
+tokei.workspace = true

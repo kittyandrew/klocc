@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust + Nix Iteration And Cache Report</title>
+  <style>
+    :root {
+      --base: #303446;
+      --mantle: #292c3c;
+      --crust: #232634;
+      --surface0: #414559;
+      --surface1: #51576d;
+      --surface2: #626880;
+      --text: #c6d0f5;
+      --subtext: #a5adce;
+      --muted: #838ba7;
+      --lavender: #babbf1;
+      --mauve: #ca9ee6;
+      --blue: #8caaee;
+      --teal: #81c8be;
+      --green: #a6d189;
+      --yellow: #e5c890;
+      --peach: #ef9f76;
+      --red: #e78284;
+      --shadow: rgba(0, 0, 0, 0.34);
+      --glow: rgba(186, 187, 241, 0.26);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(202, 158, 230, 0.22), transparent 30rem),
+        radial-gradient(circle at 90% 12%, rgba(140, 170, 238, 0.18), transparent 34rem),
+        linear-gradient(135deg, var(--base), var(--crust));
+      font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace;
+      line-height: 1.6;
+    }
+
+    a {
+      color: var(--teal);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--green);
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+    }
+
+    code, pre {
+      font-family: inherit;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 72px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 34px;
+      border: 1px solid rgba(186, 187, 241, 0.24);
+      border-radius: 28px;
+      background:
+        linear-gradient(145deg, rgba(41, 44, 60, 0.92), rgba(35, 38, 52, 0.86)),
+        radial-gradient(circle at 80% 30%, rgba(129, 200, 190, 0.18), transparent 22rem);
+      box-shadow: 0 28px 90px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      background: linear-gradient(90deg, transparent, rgba(186, 187, 241, 0.18), transparent);
+      transform: translateX(-80%);
+      animation: shimmer 9s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes shimmer {
+      0%, 30% { transform: translateX(-90%); }
+      65%, 100% { transform: translateX(90%); }
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      padding: 8px 12px;
+      border: 1px solid rgba(129, 200, 190, 0.28);
+      border-radius: 999px;
+      color: var(--teal);
+      background: rgba(129, 200, 190, 0.08);
+      font-size: 0.85rem;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      position: relative;
+      margin: 0;
+      max-width: 1000px;
+      font-size: clamp(2.3rem, 7vw, 5.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.08em;
+      background: linear-gradient(100deg, var(--lavender), var(--mauve), var(--blue), var(--teal));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 44px rgba(186, 187, 241, 0.14);
+    }
+
+    .prompt {
+      margin: 24px 0 0;
+      color: var(--green);
+      font-size: clamp(1rem, 2vw, 1.22rem);
+    }
+
+    .prompt .dollar {
+      color: var(--peach);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 22px;
+      margin-top: 28px;
+    }
+
+    .terminal {
+      padding: 20px;
+      border: 1px solid rgba(98, 104, 128, 0.62);
+      border-radius: 18px;
+      background: rgba(35, 38, 52, 0.82);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .terminal pre {
+      margin: 0;
+      overflow-x: auto;
+      color: var(--subtext);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    .terminal .ok { color: var(--green); }
+    .terminal .warn { color: var(--yellow); }
+    .terminal .hot { color: var(--peach); }
+    .terminal .cool { color: var(--blue); }
+
+    .toc {
+      padding: 20px;
+      border: 1px solid rgba(186, 187, 241, 0.16);
+      border-radius: 18px;
+      background: rgba(41, 44, 60, 0.78);
+    }
+
+    .toc h2 {
+      margin: 0 0 12px;
+      color: var(--lavender);
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .toc a {
+      display: block;
+      padding: 8px 0;
+      border-top: 1px solid rgba(98, 104, 128, 0.28);
+      color: var(--subtext);
+    }
+
+    .toc a:first-of-type {
+      border-top: 0;
+    }
+
+    section {
+      margin-top: 26px;
+      padding: 28px;
+      border: 1px solid rgba(186, 187, 241, 0.16);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(41, 44, 60, 0.88), rgba(35, 38, 52, 0.74));
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 18px;
+      color: var(--lavender);
+      font-size: clamp(1.15rem, 3vw, 1.8rem);
+      letter-spacing: -0.04em;
+    }
+
+    .section-title::before {
+      content: "\00a7";
+      color: var(--mauve);
+      text-shadow: 0 0 24px var(--glow);
+    }
+
+    .lede {
+      max-width: 76ch;
+      color: var(--subtext);
+      font-size: 1.02rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      min-height: 100%;
+      padding: 18px;
+      border: 1px solid rgba(98, 104, 128, 0.46);
+      border-radius: 18px;
+      background: rgba(35, 38, 52, 0.76);
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      color: var(--teal);
+      font-size: 1rem;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--subtext);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border: 1px solid rgba(140, 170, 238, 0.26);
+      border-radius: 999px;
+      color: var(--blue);
+      background: rgba(140, 170, 238, 0.08);
+      font-size: 0.86rem;
+      white-space: nowrap;
+    }
+
+    .badge.green { color: var(--green); border-color: rgba(166, 209, 137, 0.28); background: rgba(166, 209, 137, 0.08); }
+    .badge.peach { color: var(--peach); border-color: rgba(239, 159, 118, 0.28); background: rgba(239, 159, 118, 0.08); }
+    .badge.mauve { color: var(--mauve); border-color: rgba(202, 158, 230, 0.28); background: rgba(202, 158, 230, 0.08); }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 18px;
+      border: 1px solid rgba(98, 104, 128, 0.44);
+      border-radius: 18px;
+      background: rgba(35, 38, 52, 0.66);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    th, td {
+      padding: 13px 14px;
+      border-bottom: 1px solid rgba(98, 104, 128, 0.32);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--lavender);
+      background: rgba(65, 69, 89, 0.5);
+      font-size: 0.86rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    td {
+      color: var(--subtext);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .callout {
+      margin-top: 18px;
+      padding: 18px;
+      border: 1px solid rgba(229, 200, 144, 0.28);
+      border-radius: 18px;
+      background: rgba(229, 200, 144, 0.08);
+      color: var(--yellow);
+    }
+
+    .codeblock {
+      margin-top: 16px;
+      padding: 18px;
+      border: 1px solid rgba(98, 104, 128, 0.48);
+      border-radius: 18px;
+      background: #1f2330;
+      overflow-x: auto;
+    }
+
+    .codeblock pre {
+      margin: 0;
+      color: var(--text);
+      line-height: 1.58;
+      font-size: 0.9rem;
+    }
+
+    .codeblock .cmd { color: var(--green); }
+    .codeblock .comment { color: var(--muted); }
+
+    .ascii {
+      color: var(--mauve);
+      text-shadow: 0 0 24px rgba(202, 158, 230, 0.12);
+    }
+
+    .ascii .arrow { color: var(--peach); }
+    .ascii .label { color: var(--teal); }
+    .ascii .external { color: var(--blue); }
+
+    .footer {
+      margin: 28px 0 0;
+      padding: 20px 4px 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .hero-grid, .grid, .grid.two {
+        grid-template-columns: 1fr;
+      }
+
+      .hero, section {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">report / rust + nix / iteration latency</p>
+      <h1>Fast Rust, Reproducible Nix</h1>
+      <p class="prompt"><span class="dollar">$</span> love Rust, keep Nix, stop using VM checks as the edit loop</p>
+      <div class="hero-grid">
+        <div class="terminal" aria-label="recommended loop diagram">
+          <pre><span class="ok">inner</span>       cargo check/test/build in nix develop
+  <span class="hot">-&gt;</span> persistent target/ + incremental rustc
+
+<span class="cool">integration</span> nix build packages and unit checks
+  <span class="hot">-&gt;</span> clean sandbox + crane dependency artifacts
+
+<span class="warn">proof</span>       VM snapshots and scanner artifacts
+  <span class="hot">-&gt;</span> slow, replayable, cacheable acceptance tests</pre>
+        </div>
+        <nav class="toc" aria-label="Contents">
+          <h2>Contents</h2>
+          <a href="#takeaway">01 / Takeaway</a>
+          <a href="#current">02 / Current Repo Shape</a>
+          <a href="#cache">03 / How Nix Cache Works</a>
+          <a href="#tools">04 / Tool Comparison</a>
+          <a href="#workflow">05 / Recommended Workflow</a>
+          <a href="#diagnostics">06 / Diagnose Rebuilds</a>
+          <a href="#sources">07 / Sources</a>
+        </nav>
+      </div>
+    </header>
+
+    <section id="takeaway">
+      <h2 class="section-title">Takeaway</h2>
+      <p class="lede">The fastest path is not replacing Rust or replacing Nix. The fastest path is assigning them different jobs. Cargo is the inner-loop compiler. Nix is the reproducibility boundary, binary-cache protocol, and proof runner.</p>
+      <div class="grid">
+        <article class="card">
+          <h3>P0 / Inner Loop</h3>
+          <p>Run `cargo check -p ...` and targeted `cargo test -p ...` inside `nix develop`. This keeps the correct native dependencies while preserving Cargo incremental state.</p>
+        </article>
+        <article class="card">
+          <h3>P0 / Keep Crane</h3>
+          <p>The repo already uses `crane` correctly: package-specific `buildDepsOnly`, clean Cargo sources, and separate package derivations.</p>
+        </article>
+        <article class="card">
+          <h3>P1 / Outer Proofs</h3>
+          <p>Use Nix package builds and VM snapshots after the fast loop passes. They are reproducible proofs, not keystroke-latency tools.</p>
+        </article>
+      </div>
+      <div class="badge-row">
+        <span class="badge green">cargo = fast feedback</span>
+        <span class="badge mauve">crane = dependency cache layer</span>
+        <span class="badge peach">VM snapshots = acceptance proof</span>
+      </div>
+    </section>
+
+    <section id="current">
+      <h2 class="section-title">Current Repo Shape</h2>
+      <p class="lede">The build is already structured around `crane` and `fenix`. The slow part is mostly where the workflow lands: release-grade Nix derivations and compositor VM tests are being used during exploratory iteration.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>Observation</th></tr></thead>
+          <tbody>
+            <tr><td>`flake.nix`</td><td>Uses `fenix` stable toolchain and `craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain`.</td></tr>
+            <tr><td>`flake.nix`</td><td>Uses `cargoSrc = craneLib.cleanCargoSource ./.`, filtering non-Cargo files away from Rust rebuild inputs.</td></tr>
+            <tr><td>`flake.nix`</td><td>Splits `klocc`, `kloccd`, `klocc-gui`, and test dependency artifacts with `craneLib.buildDepsOnly`.</td></tr>
+            <tr><td>`nix/unit/default.nix`</td><td>Unit/property tests reuse `kloccTestCargoArtifacts` through `craneLib.cargoTest -p klocc`.</td></tr>
+            <tr><td>`nix/snapshot/default.nix`</td><td>Builds a scenario x environment VM matrix. This is valuable, but inherently slow.</td></tr>
+            <tr><td>`scripts/gui-wayland-live.sh`</td><td>Supports `KLOCC_GUI_BIN`, so the live runner can use `target/debug/klocc-gui` from Cargo.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">Measured locally: `klocc-gui` runtime output was about 29.3 MiB with a 143.9 MiB runtime closure. Current package/check outputs were already locally available after recent builds, which is exactly how Nix cache reuse should look.</div>
+    </section>
+
+    <section id="cache">
+      <h2 class="section-title">How Nix Cache Works</h2>
+      <p class="lede">Nix cache hits are exact-store-path hits. Cargo incremental hits are mutable `target/` hits. Those are different animals, and confusing them is where iteration loops get painful.</p>
+      <div class="codeblock ascii" aria-label="cache model diagram">
+        <pre>+------------------+  <span class="arrow">source edit</span>  +--------------------+  <span class="arrow">new drv</span>  +-------------------+
+| <span class="label">working tree</span>     | -----------&gt; | <span class="label">cleanCargoSource</span>   | --------&gt; | <span class="label">package build</span>     |
++------------------+              +--------------------+           +-------------------+
+        |                                   |                                 |
+        | <span class="external">cargo inner loop</span>               | <span class="external">dependency artifacts</span>            | <span class="external">binary substituter</span>
+        v                                   v                                 v
+   target/ cache                    crane buildDepsOnly              exact /nix/store path</pre>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mechanism</th><th>Caches</th><th>Helps With</th><th>Does Not Help With</th></tr></thead>
+          <tbody>
+            <tr><td>Local `/nix/store`</td><td>Exact store paths</td><td>Re-running the same derivation</td><td>New paths after source/flag/env changes</td></tr>
+            <tr><td>Binary substituter</td><td>Remote exact store paths</td><td>Sharing builds across machines</td><td>Dirty local derivations never uploaded</td></tr>
+            <tr><td>Flake eval cache</td><td>Evaluation for a flake version</td><td>Repeated eval of same output</td><td>Build time or changed derivations</td></tr>
+            <tr><td>Fixed-output derivations</td><td>Content-addressed fetch/vendor outputs</td><td>Crate/source fetching reuse</td><td>Compiled Rust reuse</td></tr>
+            <tr><td>`crane.buildDepsOnly`</td><td>Dependency-only Cargo artifacts</td><td>Avoiding dependency recompiles</td><td>Avoiding local crate recompiles</td></tr>
+            <tr><td>Cargo `target/`</td><td>Incremental compiler artifacts</td><td>Fast source edit rebuilds</td><td>Nix package reproducibility</td></tr>
+            <tr><td>`sccache`</td><td>rustc invocations</td><td>Repeated local/CI compiles</td><td>Binary/link steps and path churn</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tools">
+      <h2 class="section-title">Rust-on-Nix Tool Comparison</h2>
+      <p class="lede">For this workspace, `crane` remains the best default. Per-crate systems can improve binary-cache granularity, but they add generated files, evaluation surface, and native-crate override work.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Cache Granularity</th><th>Best Use</th><th>Tradeoff</th></tr></thead>
+          <tbody>
+            <tr><td>`crane`</td><td>Dependency artifact derivation plus package/check derivations</td><td>Cargo-native workspaces with good Nix checks</td><td>Coarser than per-crate systems, much simpler</td></tr>
+            <tr><td>`buildRustPackage`</td><td>Vendor/fetch deps plus one package derivation</td><td>Packaging one Rust app in nixpkgs style</td><td>Less ergonomic for check matrices and artifact reuse</td></tr>
+            <tr><td>`naersk`</td><td>Dependency derivation plus main derivation</td><td>Simple Rust projects</td><td>Less explicit/check-composable than `crane`</td></tr>
+            <tr><td>`cargo2nix`</td><td>One derivation/function per crate</td><td>CI/cache-heavy projects accepting generated Nix</td><td>More eval, generated `Cargo.nix`, git dependency caveats</td></tr>
+            <tr><td>`crate2nix`</td><td>One derivation per crate via `buildRustCrate`</td><td>Per-crate Nix incrementality</td><td>Generated file or IFD plus crate override burden</td></tr>
+            <tr><td>`sccache`</td><td>Compiler invocation cache</td><td>Cargo inner loop or CI with remote cache</td><td>Not a replacement for Nix binary caches</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <h2 class="section-title">Recommended Workflow</h2>
+      <div class="grid two">
+        <article class="card">
+          <p class="kicker">CLI / scanner edit loop</p>
+          <div class="codeblock"><pre><span class="cmd">nix develop -c cargo check -p klocc</span>
+<span class="cmd">nix develop -c cargo test -p klocc</span></pre></div>
+        </article>
+        <article class="card">
+          <p class="kicker">GUI edit loop</p>
+          <div class="codeblock"><pre><span class="cmd">nix develop -c cargo check -p klocc-gui</span>
+<span class="cmd">nix develop -c cargo build -p klocc-gui</span></pre></div>
+        </article>
+        <article class="card">
+          <p class="kicker">Live GUI with Cargo binary</p>
+          <div class="codeblock"><pre><span class="cmd">KLOCC_GUI_BIN=target/debug/klocc-gui \</span>
+<span class="cmd">  nix develop -c klocc-gui-wayland-live start artifact.sqlite</span></pre></div>
+        </article>
+        <article class="card">
+          <p class="kicker">Reproducible proof</p>
+          <div class="codeblock"><pre><span class="cmd">nix build .#packages.x86_64-linux.klocc-gui -L</span>
+<span class="cmd">nix build .#checks.x86_64-linux.klocc-unit-property-tests -L</span></pre></div>
+        </article>
+      </div>
+      <div class="callout">VM snapshots should stay in the outer loop. They validate package build, artifact generation, compositor startup, input driving, screenshots, and image assertions. That is not supposed to feel like `cargo check`.</div>
+    </section>
+
+    <section id="diagnostics">
+      <h2 class="section-title">Diagnose Rebuilds</h2>
+      <p class="lede">Before guessing why Nix rebuilt something, inspect the derivation and build plan.</p>
+      <div class="codeblock"><pre><span class="comment"># What would build or substitute?</span>
+<span class="cmd">nix build .#packages.x86_64-linux.klocc-gui --dry-run</span>
+
+<span class="comment"># Get and inspect the derivation.</span>
+<span class="cmd">nix path-info --derivation .#packages.x86_64-linux.klocc-gui</span>
+<span class="cmd">nix derivation show "$(nix path-info --derivation .#packages.x86_64-linux.klocc-gui)"</span>
+
+<span class="comment"># Compare two derivations.</span>
+<span class="cmd">nix shell nixpkgs#nix-diff -c nix-diff /nix/store/old.drv /nix/store/new.drv</span>
+
+<span class="comment"># Inspect closure size.</span>
+<span class="cmd">nix path-info --recursive --size --closure-size --human-readable .#packages.x86_64-linux.klocc-gui</span>
+
+<span class="comment"># Test eval-cache and IFD sensitivity.</span>
+<span class="cmd">nix build .#packages.x86_64-linux.klocc-gui --no-link --option eval-cache false</span>
+<span class="cmd">nix build .#packages.x86_64-linux.klocc-gui --no-link --option allow-import-from-derivation false</span></pre></div>
+    </section>
+
+    <section id="sources">
+      <h2 class="section-title">Sources Consulted</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Topic</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>`crane` API</td><td><a href="https://raw.githubusercontent.com/ipetkov/crane/master/docs/API.md">github.com/ipetkov/crane/docs/API.md</a></td></tr>
+            <tr><td>Nixpkgs Rust packaging</td><td><a href="https://raw.githubusercontent.com/NixOS/nixpkgs/master/doc/languages-frameworks/rust.section.md">nixpkgs Rust manual section</a></td></tr>
+            <tr><td>`naersk`</td><td><a href="https://raw.githubusercontent.com/nix-community/naersk/master/README.md">nix-community/naersk README</a></td></tr>
+            <tr><td>`cargo2nix`</td><td><a href="https://raw.githubusercontent.com/cargo2nix/cargo2nix/master/README.md">cargo2nix README</a></td></tr>
+            <tr><td>`crate2nix`</td><td><a href="https://raw.githubusercontent.com/nix-community/crate2nix/master/README.md">nix-community/crate2nix README</a></td></tr>
+            <tr><td>Nix derivations</td><td><a href="https://nix.dev/manual/nix/latest/language/derivations">Nix derivations manual</a></td></tr>
+            <tr><td>Nix store derivation model</td><td><a href="https://nix.dev/manual/nix/latest/store/derivation/">Nix store derivation manual</a></td></tr>
+            <tr><td>Nix config and eval cache</td><td><a href="https://nix.dev/manual/nix/latest/command-ref/conf-file">Nix config manual</a></td></tr>
+            <tr><td>Import From Derivation</td><td><a href="https://nix.dev/manual/nix/latest/language/import-from-derivation">IFD manual</a></td></tr>
+            <tr><td>`sccache` Rust caveats</td><td><a href="https://raw.githubusercontent.com/mozilla/sccache/main/docs/Rust.md">mozilla/sccache Rust docs</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="footer">Final recommendation: Cargo for fast iteration, `crane` for reproducible package proofs, VM snapshots for acceptance tests, binary cache for repeated Nix work.</p>
+  </main>
+</body>
+</html>

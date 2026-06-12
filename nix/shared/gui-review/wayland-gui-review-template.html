@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>%%TITLE%%</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #080912;
+  --panel: rgba(24, 25, 38, 0.72);
+  --panel-strong: rgba(36, 39, 58, 0.92);
+  --text: #c6d0f5;
+  --muted: #a5adce;
+  --accent: #8caaee;
+  --accent-2: #ca9ee6;
+  --line: rgba(198, 208, 245, 0.18);
+  --shadow: rgba(0, 0, 0, 0.42);
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top left, rgba(140, 170, 238, .18), transparent 34rem), var(--bg);
+  color: var(--text);
+  font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+body { padding: 10px; }
+.shell {
+  max-width: 2280px;
+  height: calc(100vh - 20px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+h1 { margin: 0; font-size: clamp(16px, 1.7vw, 24px); letter-spacing: -.045em; }
+.meta { color: var(--muted); font-size: 11px; }
+.controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex: 0 0 auto;
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(8, 9, 18, .78);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 14px 38px var(--shadow);
+}
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row + .row { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+button {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
+}
+button:hover { transform: translateY(-1px); border-color: rgba(140, 170, 238, .65); }
+button.active {
+  color: #080912;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  font-weight: 800;
+}
+.image-tab { min-width: 42px; padding-inline: 9px; }
+main { flex: 1 1 auto; min-height: 0; }
+.view { display: none; }
+.view.active { display: block; }
+#view-compare.active,
+.grid-view.active { height: 100%; min-height: 0; }
+.grid { display: grid; height: 100%; min-height: 0; gap: 6px; }
+.shot, .solo-shot {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+  box-shadow: 0 12px 42px var(--shadow);
+}
+.shot { cursor: zoom-in; }
+.shot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shot {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.shot figcaption, .solo-shot figcaption {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 25px;
+  padding: 5px 8px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: .01em;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #05060d;
+}
+.solo-shot {
+  height: calc(100vh - 116px);
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+.solo-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #05060d;
+  cursor: zoom-in;
+}
+.solo-shot.zoomed {
+  overflow: auto;
+  cursor: zoom-out;
+}
+.solo-shot.zoomed img {
+  flex: 0 0 auto;
+  width: 200%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  object-fit: unset;
+  cursor: zoom-out;
+}
+@media (max-width: 1000px) {
+  body { padding: 8px; }
+  .shell { height: calc(100vh - 16px); }
+  header { align-items: start; flex-direction: column; }
+  .solo-shot { height: calc(100vh - 176px); min-height: 360px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>%%TITLE%%</h1>
+      <div class="meta">%%SUBTITLE%%</div>
+    </div>
+    <div class="meta">%%META%%</div>
+  </header>
+
+  %%CONTENT%%
+</div>
+<script>
+const viewTabs = [...document.querySelectorAll('.view-tab')];
+const imageTabs = [...document.querySelectorAll('.image-tab')];
+const views = [...document.querySelectorAll('.view')];
+const openImages = [...document.querySelectorAll('[data-open-image]')];
+const soloImages = [...document.querySelectorAll('.solo-shot img')];
+
+function activateView(name) {
+  views.forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
+  viewTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.view === name));
+  imageTabs.forEach(tab => tab.classList.remove('active'));
+}
+
+function activateImage(id) {
+  views.forEach(view => view.classList.toggle('active', view.id === `single-${id}`));
+  viewTabs.forEach(tab => tab.classList.remove('active'));
+  imageTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.image === id));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+viewTabs.forEach(tab => tab.addEventListener('click', () => activateView(tab.dataset.view)));
+imageTabs.forEach(tab => tab.addEventListener('click', () => activateImage(tab.dataset.image)));
+openImages.forEach(card => {
+  card.addEventListener('click', () => activateImage(card.dataset.openImage));
+  card.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activateImage(card.dataset.openImage);
+    }
+  });
+});
+soloImages.forEach(image => {
+  image.addEventListener('click', event => {
+    const shot = image.closest('.solo-shot');
+    if (!shot) return;
+    if (shot.classList.contains('zoomed')) {
+      shot.classList.remove('zoomed');
+      return;
+    }
+
+    const rect = image.getBoundingClientRect();
+    const xRatio = (event.clientX - rect.left) / rect.width;
+    const yRatio = (event.clientY - rect.top) / rect.height;
+    shot.classList.add('zoomed');
+
+    requestAnimationFrame(() => {
+      const caption = shot.querySelector('figcaption');
+      const captionHeight = caption ? caption.offsetHeight : 0;
+      shot.scrollLeft = image.offsetWidth * xRatio - shot.clientWidth / 2;
+      shot.scrollTop = captionHeight + image.offsetHeight * yRatio - shot.clientHeight / 2;
+    });
+  });
+});
+</script>
+</body>
+</html>

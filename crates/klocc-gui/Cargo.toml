@@ -1,0 +1,14 @@
+[package]
+name = "klocc-gui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+klocc-artifact = { path = "../klocc-artifact" }
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
