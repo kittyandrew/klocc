@@ -5,6 +5,7 @@ use rocket::tokio::task;
 use std::time::SystemTime;
 
 use crate::body::PostJobData;
+use crate::cors::Cors;
 use crate::counter::{get_data_from_repo, get_latest_hash};
 use crate::data::Database;
 use crate::prom::TOTAL_REPOSITORIES_SERVED;
@@ -75,7 +76,7 @@ const VERIFY_MIN_INTERVAL: u64 = 60 * 5; // @Robustness: Hopefully verifying cac
 // don't have 'format' (content-type header) required for this endpoint (or any
 // other header requirements), so *any* GET request has to be valid here.
 #[get("/health")]
-pub async fn get_health(db: &State<Database>) -> Value {
+pub async fn get_health(_cors: Cors, db: &State<Database>) -> Value {
     // Just for informational purposes add count of total cached items
     // in the storage to the response (TODO(andrew): add storage size,
     // meaning an actual amount of memory taken by cache).
@@ -88,7 +89,7 @@ pub async fn get_health(db: &State<Database>) -> Value {
 
 // Native metrics export support for Prometheus.
 #[get("/metrics")]
-pub async fn get_metrics(encoder: &State<TextEncoder>) -> String {
+pub async fn get_metrics(_cors: Cors, encoder: &State<TextEncoder>) -> String {
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();
 
@@ -97,7 +98,7 @@ pub async fn get_metrics(encoder: &State<TextEncoder>) -> String {
 }
 
 #[post("/jobs", format = "application/json", data = "<data>")]
-pub async fn post_klocc_job(db: &State<Database>, data: PostJobData) -> Value {
+pub async fn post_klocc_job(_cors: Cors, db: &State<Database>, data: PostJobData) -> Value {
     // Note(andrew): First thing first, we are trying to expand service name into url, using our
     //     helper function. If it fails to match provider to any known service, it returns an error
     //     message, explaining the problem, which we pass through json directly to the callee. To
