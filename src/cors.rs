@@ -1,7 +1,5 @@
-use rocket::fairing::{Fairing, Info, Kind};
-use rocket::http::{Header, Method, Status};
 use rocket::request::{FromRequest, Outcome};
-use rocket::{Request, Response};
+use rocket::{Request, Response, fairing::Fairing, fairing::Info, fairing::Kind, http::Header, http::Method, http::Status};
 use url::{Origin, Url};
 
 pub struct Cors(bool);
@@ -49,10 +47,7 @@ impl<'r> FromRequest<'r> for Cors {
 #[rocket::async_trait]
 impl Fairing for CorsHeaders {
     fn info(&self) -> Info {
-        Info {
-            name: "Credentialed cross-origin requests",
-            kind: Kind::Response,
-        }
+        Info { name: "Credentialed cross-origin requests", kind: Kind::Response }
     }
 
     async fn on_response<'r>(&self, request: &'r Request<'_>, response: &mut Response<'r>) {
@@ -63,10 +58,7 @@ impl Fairing for CorsHeaders {
         response.adjoin_header(Header::new("Vary", "Origin"));
         if request.method() == Method::Options {
             response.set_header(Header::new("Access-Control-Allow-Methods", "GET, POST"));
-            response.adjoin_header(Header::new(
-                "Vary",
-                "Access-Control-Request-Method, Access-Control-Request-Headers",
-            ));
+            response.adjoin_header(Header::new("Vary", "Access-Control-Request-Method, Access-Control-Request-Headers"));
             if let Some(headers) = request.headers().get_one("Access-Control-Request-Headers") {
                 response.set_header(Header::new("Access-Control-Allow-Headers", headers.to_owned()));
             }
@@ -92,10 +84,7 @@ mod tests {
                 let response = client.get(path).header(Header::new("Origin", origin)).dispatch();
                 assert_eq!(response.status(), Status::Ok);
                 assert_eq!(response.headers().get_one("Access-Control-Allow-Origin"), Some(origin));
-                assert_eq!(
-                    response.headers().get_one("Access-Control-Allow-Credentials"),
-                    Some("true")
-                );
+                assert_eq!(response.headers().get_one("Access-Control-Allow-Credentials"), Some("true"));
                 assert!(response.headers().get("Vary").any(|value| value.contains("Origin")));
             }
         }
@@ -104,30 +93,14 @@ mod tests {
                 .options(path)
                 .header(Header::new("Origin", "https://client.example"))
                 .header(Header::new("Access-Control-Request-Method", "POST"))
-                .header(Header::new(
-                    "Access-Control-Request-Headers",
-                    "authorization, content-type, x-custom",
-                ))
+                .header(Header::new("Access-Control-Request-Headers", "authorization, content-type, x-custom"))
                 .dispatch();
             assert_eq!(response.status(), Status::NoContent);
-            assert_eq!(
-                response.headers().get_one("Access-Control-Allow-Methods"),
-                Some("GET, POST")
-            );
-            assert_eq!(
-                response.headers().get_one("Access-Control-Allow-Headers"),
-                Some("authorization, content-type, x-custom")
-            );
+            assert_eq!(response.headers().get_one("Access-Control-Allow-Methods"), Some("GET, POST"));
+            assert_eq!(response.headers().get_one("Access-Control-Allow-Headers"), Some("authorization, content-type, x-custom"));
         }
         assert_eq!(client.options("/api/jobs").dispatch().status(), Status::NotFound);
-        assert!(
-            client
-                .get("/api/health")
-                .dispatch()
-                .headers()
-                .get_one("Access-Control-Allow-Origin")
-                .is_none()
-        );
+        assert!(client.get("/api/health").dispatch().headers().get_one("Access-Control-Allow-Origin").is_none());
         for (method, status) in [("DELETE", Status::Forbidden), ("INVALID", Status::BadRequest)] {
             let response = client
                 .options("/api/jobs")
@@ -137,16 +110,10 @@ mod tests {
             assert_eq!(response.status(), status);
             assert!(response.headers().get_one("Access-Control-Allow-Origin").is_none());
         }
-        let response = client
-            .options("/api/jobs")
-            .header(Header::new("Origin", "https://client.example"))
-            .dispatch();
+        let response = client.options("/api/jobs").header(Header::new("Origin", "https://client.example")).dispatch();
         assert_eq!(response.status(), Status::BadRequest);
-        let response = client
-            .post("/api/jobs")
-            .header(rocket::http::ContentType::JSON)
-            .header(Header::new("Origin", "invalid"))
-            .dispatch();
+        let response =
+            client.post("/api/jobs").header(rocket::http::ContentType::JSON).header(Header::new("Origin", "invalid")).dispatch();
         assert_eq!(response.status(), Status::BadRequest);
         assert!(response.headers().get_one("Access-Control-Allow-Origin").is_none());
     }

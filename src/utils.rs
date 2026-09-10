@@ -5,9 +5,6 @@ pub fn expand_url(service: &String, username: &String, reponame: &String) -> Res
     match service.as_str() {
         "github" => Ok(format!("https://github.com/{}/{}.git", username, reponame)),
         "gitlab" => Ok(format!("https://gitlab.com/{}/{}.git", username, reponame)),
-        _ => Err(format!(
-            "Service provider for git with a name '{}' is not supported!",
-            service
-        )),
+        _ => Err(format!("Service provider for git with a name '{}' is not supported!", service)),
     }
 }
