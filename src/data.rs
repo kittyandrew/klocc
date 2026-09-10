@@ -1,7 +1,5 @@
-use rocket::serde::Serialize;
-use rocket::tokio::sync::Mutex;
-use std::collections::HashMap;
-use std::time::SystemTime;
+use rocket::{serde::Serialize, tokio::sync::Mutex};
+use std::{collections::HashMap, time::SystemTime};
 
 #[derive(Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -29,13 +27,7 @@ pub struct FileInfo {
 
 impl FileInfo {
     pub fn new(name: String, path: String, code: u32, comments: u32, blanks: u32) -> Self {
-        Self {
-            name,
-            path,
-            code,
-            comments,
-            blanks,
-        }
+        Self { name, path, code, comments, blanks }
     }
 }
 
@@ -49,11 +41,7 @@ pub struct LanguageInfo {
 
 impl LanguageInfo {
     pub fn new(name: String, total: Info) -> Self {
-        Self {
-            name,
-            total,
-            files: Vec::new(),
-        }
+        Self { name, total, files: Vec::new() }
     }
 }
 

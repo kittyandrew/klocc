@@ -1,15 +1,9 @@
 use prometheus::{self, Encoder, TextEncoder};
-use rocket::State;
-use rocket::serde::json::{Value, json};
-use rocket::tokio::task;
+use rocket::{State, serde::json::Value, serde::json::json, tokio::task};
 use std::time::SystemTime;
 
-use crate::body::PostJobData;
-use crate::cors::Cors;
 use crate::counter::{get_data_from_repo, get_latest_hash};
-use crate::data::Database;
-use crate::prom::TOTAL_REPOSITORIES_SERVED;
-use crate::utils::expand_url;
+use crate::{body::PostJobData, cors::Cors, data::Database, prom::TOTAL_REPOSITORIES_SERVED, utils::expand_url};
 
 // Note(andrew): To avoid spamming git server with a check for latest commit hash
 //     on every request, which is extremely slow and not productive (sending 1000
@@ -148,10 +142,7 @@ pub async fn post_klocc_job(_cors: Cors, db: &State<Database>, data: PostJobData
         let _target = "HEAD".to_string();
         // This method will return a hash of the latest commit in the repository for us to save for later,
         // or an error if the repository doesn't exist (or it's not available).
-        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target))
-            .await
-            .unwrap()
-        {
+        hash = match task::spawn_blocking(move || get_latest_hash(_repo_url, _target)).await.unwrap() {
             // @UnsafeUnwrap @Robustness: Thread can fail?
             Ok(value) => value,
             Err(msg) => {
@@ -204,9 +195,7 @@ pub async fn post_klocc_job(_cors: Cors, db: &State<Database>, data: PostJobData
         //     finishes (wait is asynchronous). Which, in practice, means that the server can process
         //     other requests in the meantime and do other useful work, while we are waiting for download
         //     or result of analysis (everything inside dispatched routine below).
-        let result = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url))
-            .await
-            .unwrap(); // @PotentialPanic @Robustness: Thread can fail?
+        let result = task::spawn_blocking(move || get_data_from_repo(_username, _reponame, _repo_url)).await.unwrap(); // @PotentialPanic @Robustness: Thread can fail?
 
         // Note(andrew): Our klocc procedure returns a result, where different errors and edge-cases are
         //     handled, explained and propagated in a form of an error message (as a string), so here we

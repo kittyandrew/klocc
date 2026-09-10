@@ -1,27 +1,16 @@
 use lazy_static::lazy_static;
 use prometheus::{HistogramVec, IntCounter, register_histogram_vec, register_int_counter};
-use rocket::fairing::{Fairing, Info, Kind};
-use rocket::http::Method;
-use rocket::{Data, Request, Response};
+use rocket::{Data, Request, Response, fairing::Fairing, fairing::Info, fairing::Kind, http::Method};
 use std::time::Instant;
 
 lazy_static! {
-    pub static ref TOTAL_REQUESTS_SERVED: IntCounter = register_int_counter!(
-        "klocc_total_requests_served",
-        "Total number of requests served at /api/jobs endpoint"
-    )
-    .unwrap();
-    pub static ref TOTAL_REPOSITORIES_SERVED: IntCounter = register_int_counter!(
-        "klocc_total_repositories_served",
-        "Total number of repositories processed and analyzed"
-    )
-    .unwrap();
-    pub static ref JOB_REQUESTS_DURATION: HistogramVec = register_histogram_vec!(
-        "klocc_jobs_requests_duration_seconds",
-        "Jobs endpoint latencies in seconds",
-        &["handler"]
-    )
-    .unwrap();
+    pub static ref TOTAL_REQUESTS_SERVED: IntCounter =
+        register_int_counter!("klocc_total_requests_served", "Total number of requests served at /api/jobs endpoint").unwrap();
+    pub static ref TOTAL_REPOSITORIES_SERVED: IntCounter =
+        register_int_counter!("klocc_total_repositories_served", "Total number of repositories processed and analyzed").unwrap();
+    pub static ref JOB_REQUESTS_DURATION: HistogramVec =
+        register_histogram_vec!("klocc_jobs_requests_duration_seconds", "Jobs endpoint latencies in seconds", &["handler"])
+            .unwrap();
     pub static ref JOB_RESPONSE_SIZE_BYTES: HistogramVec = register_histogram_vec!(
         "klocc_jobs_response_size_bytes",
         "Jobs endpoint response body size in bytes",
@@ -39,10 +28,7 @@ struct DurationTimer(Option<Instant>);
 #[rocket::async_trait]
 impl Fairing for PrometheusCollection {
     fn info(&self) -> Info {
-        Info {
-            name: "Prometheus metrics",
-            kind: Kind::Request | Kind::Response,
-        }
+        Info { name: "Prometheus metrics", kind: Kind::Request | Kind::Response }
     }
 
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
@@ -61,10 +47,7 @@ impl Fairing for PrometheusCollection {
             if let Some(duration) = duration_timer.0.map(|st| st.elapsed()) {
                 let latency_ms = duration.as_millis();
 
-                JOB_REQUESTS_DURATION
-                    .local()
-                    .with_label_values(&["all"])
-                    .observe(latency_ms as f64 / 1000.);
+                JOB_REQUESTS_DURATION.local().with_label_values(&["all"]).observe(latency_ms as f64 / 1000.);
                 // While we can, lets add response header with timing as well.
                 response.set_raw_header("X-Response-Time", format!("{} ms", latency_ms));
             };
@@ -74,10 +57,7 @@ impl Fairing for PrometheusCollection {
 
             // Record response body size.
             if let Some(body_size) = response.body_mut().size().await {
-                JOB_RESPONSE_SIZE_BYTES
-                    .local()
-                    .with_label_values(&["all"])
-                    .observe(body_size as f64);
+                JOB_RESPONSE_SIZE_BYTES.local().with_label_values(&["all"]).observe(body_size as f64);
             };
         }
     }

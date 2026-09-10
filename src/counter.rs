@@ -1,5 +1,4 @@
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{process::Command, time::SystemTime, time::UNIX_EPOCH};
 use tokei::{Config, Languages, Sort};
 
 use crate::data::{Data, FileInfo, Info, LanguageInfo};
@@ -77,15 +76,7 @@ pub fn get_data_from_repo(_username: String, reponame: String, repo_url: String)
         // This might be worth factoring out in the separate function.
         let output = Command::new("git")
             // TODO: Here we always do recurse-submodules, but this can break easily when the submodule is not public.  @Robustness
-            .args([
-                "clone",
-                "--depth",
-                "1",
-                "--single-branch",
-                "--recurse-submodules",
-                &repo_url,
-                repo_path,
-            ])
+            .args(["clone", "--depth", "1", "--single-branch", "--recurse-submodules", &repo_url, repo_path])
             .output();
 
         // Note(andrew): Confusingly enough, this is an internal rust error for running
@@ -117,10 +108,7 @@ pub fn get_data_from_repo(_username: String, reponame: String, repo_url: String)
     //
     //         sort: Some(Sort::Files)
     //
-    let config = Config {
-        treat_doc_strings_as_comments: Some(true),
-        ..Config::default()
-    };
+    let config = Config { treat_doc_strings_as_comments: Some(true), ..Config::default() };
 
     // Here we are calling the 'tokei' lib to actually read given paths and provide us with
     // statistical information about it.
@@ -158,13 +146,7 @@ pub fn get_data_from_repo(_username: String, reponame: String, repo_url: String)
             offset = path.find(&reponame).unwrap() + reponame.len() + 1; // @UnsafeUnwrap
             path.drain(..offset);
 
-            file = FileInfo::new(
-                name,
-                path,
-                report.stats.code as u32,
-                report.stats.comments as u32,
-                report.stats.blanks as u32,
-            );
+            file = FileInfo::new(name, path, report.stats.code as u32, report.stats.comments as u32, report.stats.blanks as u32);
 
             lang.files.push(file);
         }
