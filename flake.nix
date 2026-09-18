@@ -105,7 +105,7 @@
           inherit klocc kloccFrontend;
           klocc-frontend = kloccFrontend;
         }
-        // lib.optionalAttrs pkgs.stdenv.isLinux {
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           docker-image = dockerImage;
           klocc-server-image = dockerImage;
         };
