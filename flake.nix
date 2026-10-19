@@ -45,12 +45,12 @@
 
       kloccFrontend = pkgs.buildNpmPackage {
         pname = "klocc-frontend";
-        version = "0096318";
+        version = "38ac1c0";
         src = pkgs.fetchFromGitHub {
           owner = "Katerynaru4";
           repo = "klocc-frontend";
-          rev = "0096318db1a3c5a75d5b8257163a742179a71b0e";
-          hash = "sha256-IB7H4z5Vip29+eu0ZjyZvy6E+6uQ2yTQ3zpJ8T8mnP8=";
+          rev = "38ac1c0a284d3e4bc07cc47a2c476e59840549f2";
+          hash = "sha256-A8REV7qAeCKqnA9K3pUnHhgn7HG7vgIHAw8EdXKch38=";
         };
         nodejs = pkgs.nodejs;
         npmDepsHash = "sha256-HU1wX+Lgl097b3YVfdKN5g3dACraow97fu+mrLdYlkg=";
