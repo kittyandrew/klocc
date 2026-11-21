@@ -3,12 +3,10 @@ name = "klocc"
 version = "0.1.6"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 tokei = "14.0.0"
 tempfile = "3.27.0"
-rocket = { git = "https://github.com/rwf2/Rocket", rev = "3a54d079aef060a8f732bd04ea54b0581a604087", features = ["json"] }
+rocket = { git = "https://github.com/rwf2/Rocket", rev = "0ca096f705d60082593a3e9b035d8c2a92595ca0", features = ["json"] }
 url = "2.5"
 prometheus = { version = "0.14.0", default-features = false }
 lazy_static = "1.5.0"
