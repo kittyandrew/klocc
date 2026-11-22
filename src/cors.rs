@@ -77,6 +77,15 @@ mod tests {
     use rocket::local::blocking::Client;
 
     #[test]
+    fn nested_blob_origin_does_not_abort_the_server() {
+        let client = Client::tracked(crate::rocket()).unwrap();
+        let origin = format!("{}https://client.example/", "blob:".repeat(10_000));
+        let response = client.get("/api/health").header(Header::new("Origin", origin.clone())).dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.headers().get_one("Access-Control-Allow-Origin"), Some(origin.as_str()));
+    }
+
+    #[test]
     fn browser_requests_preserve_the_public_cors_policy() {
         let client = Client::tracked(crate::rocket()).unwrap();
         for origin in ["https://client.example", "null"] {
